@@ -12,15 +12,24 @@ import secrets
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-# ──────────────────────────────────────────────
-#  관리자 로그인 정보 (여기서 변경하세요!)
-# ──────────────────────────────────────────────
-ADMIN_ID = 'admin'
-ADMIN_PW = 'dh1415!'
-# ──────────────────────────────────────────────
-
 PORT = 8000
 TOKENS = set()  # 로그인 성공 시 발급되는 인증 토큰 (서버 재시작 시 초기화)
+
+# ──────────────────────────────────────────────
+#  관리자 로그인 정보는 admin_config.json 파일에 있습니다.
+#  (이 파일은 인터넷에 올라가지 않습니다 — .gitignore 처리됨)
+#  아이디/비밀번호를 바꾸려면 admin_config.json 을 수정하고
+#  서버를 재시작하세요.
+# ──────────────────────────────────────────────
+_ROOT_EARLY = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(_ROOT_EARLY, 'admin_config.json')
+if not os.path.exists(CONFIG_FILE):
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as _f:
+        json.dump({'id': 'admin', 'pw': 'dh1415!'}, _f, ensure_ascii=False, indent=2)
+with open(CONFIG_FILE, encoding='utf-8') as _f:
+    _cfg = json.load(_f)
+ADMIN_ID = _cfg.get('id', 'admin')
+ADMIN_PW = _cfg.get('pw', '')
 ROOT = os.path.dirname(os.path.abspath(__file__))
 ROOMS_DIR = os.path.join(ROOT, 'images', 'rooms')
 GALLERY_DIR = os.path.join(ROOT, 'images', 'photos')
