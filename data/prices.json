@@ -130,7 +130,7 @@
       "id": "deckzone",
       "group": "deck",
       "name": "데크존",
-      "badge": "바비큐 데크",
+      "badge": "캠핑 데크",
       "cover": "images/gallery/g08.jpg",
       "std": 2,
       "max": 4,
@@ -145,7 +145,7 @@
         ]
       },
       "extra": "인원 추가 1인 5,000원",
-      "desc": "바다를 보며 바비큐를 즐기는 야외 데크 공간"
+      "desc": "내 텐트로 즐기는 오션뷰 캠핑 데크"
     }
   ],
   "options": [
