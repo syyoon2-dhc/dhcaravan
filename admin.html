@@ -192,7 +192,7 @@ let remoteFiles = {};   // 파일명 -> { sha, download_url, size }
 let remotePhotos = [];
 
 function gh(path, opts = {}) {
-  return fetch(`https://api.github.com/repos/${REPO}/${path}`, {
+  return fetch(`https://api.github.com/repos/${REPO}${path ? '/' + path : ''}`, {
     ...opts,
     headers: {
       'Authorization': `Bearer ${GH_TOKEN}`,
