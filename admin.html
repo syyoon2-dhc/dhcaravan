@@ -107,7 +107,7 @@
       <input type="file" id="video-input" accept="video/mp4,video/*">
     </label>
     <div class="progress" id="video-progress"><div class="bar"><i id="video-bar"></i></div><p id="video-msg"></p></div>
-    <p class="hint">· 동영상은 압축 없이 그대로 올라갑니다. <b>1~2분, 100MB 이하</b>를 권장합니다.<br>· 새 동영상을 올리면 기존 동영상이 교체됩니다.</p>
+    <p class="hint">· 동영상은 자동으로 <b>720p로 압축</b>되어 저장됩니다 (휴대폰 원본 그대로 올려도 OK).<br>· 새 동영상을 올리면 기존 동영상이 교체됩니다.</p>
   </div>
 </div>
 
@@ -327,12 +327,22 @@ $('video-input').addEventListener('change', e => {
     if (ev.lengthComputable) {
       const pct = Math.round((ev.loaded / ev.total) * 100);
       bar.style.width = pct + '%';
-      msg.textContent = `업로드 중... ${pct}% (${(ev.loaded / 1024 / 1024).toFixed(1)} / ${(ev.total / 1024 / 1024).toFixed(1)} MB)`;
+      msg.textContent = pct >= 100
+        ? '서버에서 자동 압축 중... 영상 길이에 따라 1~3분 걸릴 수 있습니다 ⏳'
+        : `업로드 중... ${pct}% (${(ev.loaded / 1024 / 1024).toFixed(1)} / ${(ev.total / 1024 / 1024).toFixed(1)} MB)`;
     }
   };
   xhr.onload = () => {
     prog.classList.remove('show'); bar.style.width = '0'; msg.textContent = '';
-    if (xhr.status === 200) { toast('동영상 업로드 완료!'); loadMedia(); }
+    if (xhr.status === 200) {
+      let info = '';
+      try {
+        const r = JSON.parse(xhr.responseText);
+        if (r.compressed) info = ` (${r.originalMB}MB → ${r.finalMB}MB 압축)`;
+      } catch {}
+      toast('동영상 업로드 완료!' + info);
+      loadMedia();
+    }
     else toast('⚠️ 업로드 실패: ' + xhr.responseText);
   };
   xhr.onerror = () => { prog.classList.remove('show'); toast('⚠️ 업로드 중 오류가 발생했습니다'); };

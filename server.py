@@ -5,10 +5,13 @@
 접속:  http://<PC IP>:8000          (홈페이지)
        http://<PC IP>:8000/admin.html (사진 관리)
 """
+import glob
 import json
 import os
 import re
 import secrets
+import shutil
+import subprocess
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -38,6 +41,40 @@ MAX_PHOTO = 20 * 1024 * 1024    # 20MB (브라우저에서 이미 압축돼서 �
 MAX_VIDEO = 500 * 1024 * 1024   # 500MB
 
 PHOTO_RE = re.compile(r'^\d+\.jpg$')
+
+
+def find_ffmpeg():
+    """ffmpeg 실행 파일 찾기 (PATH → winget 설치 경로 순)"""
+    path = shutil.which('ffmpeg')
+    if path:
+        return path
+    pattern = os.path.join(os.environ.get('LOCALAPPDATA', ''),
+                           'Microsoft', 'WinGet', 'Packages', 'Gyan.FFmpeg*', '*', 'bin', 'ffmpeg.exe')
+    hits = glob.glob(pattern)
+    return hits[0] if hits else None
+
+
+FFMPEG = find_ffmpeg()
+
+
+def compress_video(src, dst):
+    """동영상을 720p H.264로 압축. 성공하면 True.
+    (세로 영상도 긴 쪽 기준으로 자동 축소됨)"""
+    if not FFMPEG:
+        return False
+    cmd = [
+        FFMPEG, '-y', '-i', src,
+        '-vf', "scale=-2:'min(720\\,ih)'",
+        '-c:v', 'libx264', '-crf', '28', '-preset', 'fast',
+        '-c:a', 'aac', '-b:a', '96k',
+        '-movflags', '+faststart',
+        dst,
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, timeout=600)
+        return result.returncode == 0 and os.path.exists(dst) and os.path.getsize(dst) > 0
+    except (subprocess.TimeoutExpired, OSError):
+        return False
 
 
 def list_photos(room_dir):
@@ -156,9 +193,27 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(400, {'error': '업로드가 중단되었습니다'})
 
             if kind == 'video':
-                with open(os.path.join(d, 'video.mp4'), 'wb') as f:
+                final = os.path.join(d, 'video.mp4')
+                raw = os.path.join(d, '_upload_raw.mp4')
+                with open(raw, 'wb') as f:
                     f.write(data)
-                return self._json(200, {'ok': True, 'file': 'video.mp4'})
+                # ffmpeg 자동 압축 (720p H.264) — 압축본이 더 크면 원본 유지
+                tmp = os.path.join(d, '_compressed.mp4')
+                original_size = len(data)
+                if compress_video(raw, tmp) and os.path.getsize(tmp) < original_size:
+                    os.replace(tmp, final)
+                    os.remove(raw)
+                else:
+                    if os.path.exists(tmp):
+                        os.remove(tmp)
+                    os.replace(raw, final)
+                final_size = os.path.getsize(final)
+                return self._json(200, {
+                    'ok': True, 'file': 'video.mp4',
+                    'originalMB': round(original_size / 1024 / 1024, 1),
+                    'finalMB': round(final_size / 1024 / 1024, 1),
+                    'compressed': final_size < original_size,
+                })
 
             photos = list_photos(d)
             next_no = int(photos[-1].split('.')[0]) + 1 if photos else 1

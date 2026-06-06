@@ -192,10 +192,10 @@ function openRoomModal(room) {
   document.getElementById('modal-price').innerHTML = `
     <table>
       <tr><th></th><th>평일</th><th>주말</th></tr>
-      <tr><th>정상가</th><td>${won(room.price.normal[0])}원</td><td>${won(room.price.normal[1])}원</td></tr>
+      <tr><th>비수기</th><td>${won(room.price.normal[0])}원</td><td>${won(room.price.normal[1])}원</td></tr>
       <tr><th>성수기</th><td>${won(room.price.peak[0])}원</td><td>${won(room.price.peak[1])}원</td></tr>
     </table>
-    <p class="note">주말: 금·토 및 공휴일 전날 / 성수기 기간은 문의해 주세요.</p>`;
+    <p class="note">2026년 성수기: 7/16 ~ 8/30, 12/31 · 주말: 금·토 및 공휴일 전날 · <b>비수기 금요일은 평일 비용</b></p>`;
 
   modal.hidden = false;
   document.body.style.overflow = 'hidden';
