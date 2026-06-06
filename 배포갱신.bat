@@ -6,6 +6,7 @@ echo  ===== 동해카라반펜션 홈페이지 배포 갱신 =====
 echo.
 git add -A
 git commit -m "사진/내용 업데이트"
+git pull --rebase origin master
 git push
 echo.
 echo  ============================================

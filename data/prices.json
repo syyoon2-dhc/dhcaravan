@@ -1,0 +1,177 @@
+{
+  "rooms": [
+    {
+      "id": "adora",
+      "group": "caravan",
+      "name": "아도라542UL",
+      "badge": "오션 전면뷰",
+      "cover": "images/gallery/g03.jpg",
+      "std": 2,
+      "max": 5,
+      "price": {
+        "normal": [
+          120000,
+          170000
+        ],
+        "peak": [
+          170000,
+          220000
+        ]
+      },
+      "extra": "인원 추가 1인 10,000원",
+      "desc": "바다를 정면으로 마주한 프리미엄 유럽형 카라반"
+    },
+    {
+      "id": "harby",
+      "group": "caravan",
+      "name": "하비495WFB",
+      "badge": "오션 전면뷰",
+      "cover": "images/gallery/g09.jpg",
+      "std": 2,
+      "max": 4,
+      "price": {
+        "normal": [
+          120000,
+          170000
+        ],
+        "peak": [
+          170000,
+          220000
+        ]
+      },
+      "extra": "인원 추가 1인 10,000원",
+      "desc": "아늑한 분위기의 오션 전면뷰 카라반"
+    },
+    {
+      "id": "pursuit",
+      "group": "caravan",
+      "name": "퍼슈트530-4",
+      "badge": "오션 측면뷰",
+      "cover": "images/gallery/g04.jpg",
+      "std": 2,
+      "max": 4,
+      "price": {
+        "normal": [
+          100000,
+          150000
+        ],
+        "peak": [
+          150000,
+          200000
+        ]
+      },
+      "extra": "인원 추가 1인 10,000원",
+      "desc": "실속 있게 즐기는 오션 측면뷰 카라반"
+    },
+    {
+      "id": "gureum",
+      "group": "pension",
+      "name": "구름",
+      "badge": "펜션 객실",
+      "cover": "images/gallery/g01.jpg",
+      "std": 4,
+      "max": 6,
+      "price": {
+        "normal": [
+          100000,
+          150000
+        ],
+        "peak": [
+          150000,
+          200000
+        ]
+      },
+      "extra": "인원 추가 비용 없음",
+      "desc": "가족 여행에 좋은 아늑한 펜션 객실"
+    },
+    {
+      "id": "bada",
+      "group": "pension",
+      "name": "바다",
+      "badge": "펜션 객실",
+      "cover": "images/gallery/g06.jpg",
+      "std": 4,
+      "max": 6,
+      "price": {
+        "normal": [
+          100000,
+          150000
+        ],
+        "peak": [
+          150000,
+          200000
+        ]
+      },
+      "extra": "인원 추가 비용 없음",
+      "desc": "푸른 바다가 보이는 편안한 펜션 객실"
+    },
+    {
+      "id": "mujigae",
+      "group": "pension",
+      "name": "무지개",
+      "badge": "단체 추천",
+      "cover": "images/gallery/g12.jpg",
+      "std": 8,
+      "max": 12,
+      "price": {
+        "normal": [
+          200000,
+          300000
+        ],
+        "peak": [
+          300000,
+          400000
+        ]
+      },
+      "extra": "인원 추가 비용 없음",
+      "desc": "단체 모임 · 대가족에 좋은 넓은 객실"
+    },
+    {
+      "id": "deckzone",
+      "group": "deck",
+      "name": "데크존",
+      "badge": "바비큐 데크",
+      "cover": "images/gallery/g08.jpg",
+      "std": 2,
+      "max": 4,
+      "price": {
+        "normal": [
+          30000,
+          40000
+        ],
+        "peak": [
+          40000,
+          50000
+        ]
+      },
+      "extra": "인원 추가 1인 5,000원",
+      "desc": "바다를 보며 바비큐를 즐기는 야외 데크 공간"
+    }
+  ],
+  "options": [
+    {
+      "name": "월광보합",
+      "detail": "추억의 오락기 이용",
+      "price": "무료"
+    },
+    {
+      "name": "바비큐 장비",
+      "detail": "웨버57 (6~8인용)",
+      "price": "30,000원"
+    },
+    {
+      "name": "바비큐 장비",
+      "detail": "웨버47 (2~4인용)",
+      "price": "20,000원"
+    }
+  ],
+  "optionNote": "✔ 바비큐 장비 공통 지급품목 : 숯(초기 점화 후 지급) · 여유숯 · 일회용 전용석쇠 · 장갑",
+  "notes": [
+    "<strong>2026년 성수기 : 7월 16일 ~ 8월 30일, 12월 31일</strong>",
+    "주말 : 금 · 토요일 및 공휴일 전날 기준입니다.",
+    "<strong>비수기 금요일은 평일 비용</strong>이 적용됩니다.",
+    "인원 추가는 영 · 유아를 포함한 인원 기준입니다.",
+    "자세한 요금은 전화로 문의해 주세요."
+  ],
+  "modalNote": "2026년 성수기: 7/16 ~ 8/30, 12/31 · 주말: 금·토 및 공휴일 전날 · <b>비수기 금요일은 평일 비용</b>"
+}

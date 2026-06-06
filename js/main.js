@@ -1,70 +1,22 @@
 /* ============ 동해카라반펜션 ============ */
 
-/* ---------- 객실 데이터 ----------
- * photos 폴더(images/rooms/<id>/)에 1.jpg, 2.jpg, 3.jpg ... 순서로
- * 사진을 넣으면 객실 상세에 자동으로 표시됩니다. (최대 12장)
- * cover 는 객실 카드에 보이는 대표 사진입니다.
- *  - images/rooms/<id>/1.jpg 가 있으면 그 사진이 자동으로 대표 사진이 되고,
- *  - 없으면 아래 cover 에 적힌 기본 사진이 보입니다.
+/* ---------- 객실 · 요금 데이터 ----------
+ * 모든 객실 정보와 요금은 data/prices.json 파일에서 불러옵니다.
+ * (admin.html 관리 페이지에서 수정 가능)
+ *
+ * 객실 사진: images/rooms/<id>/ 폴더에 1.jpg, 2.jpg ... 순서로
+ * 넣으면 자동 표시됩니다. 1.jpg 가 객실 카드의 대표 사진이 됩니다.
  */
-const ROOMS = [
-  {
-    id: 'adora', group: 'caravan', name: '아도라542UL',
-    badge: '오션 전면뷰', cover: 'images/gallery/g03.jpg',
-    std: 2, max: 5,
-    price: { normal: [120000, 170000], peak: [170000, 220000] },
-    extra: '인원 추가 1인 10,000원',
-    desc: '바다를 정면으로 마주한 프리미엄 유럽형 카라반',
-  },
-  {
-    id: 'harby', group: 'caravan', name: '하비495WFB',
-    badge: '오션 전면뷰', cover: 'images/gallery/g09.jpg',
-    std: 2, max: 4,
-    price: { normal: [120000, 170000], peak: [170000, 220000] },
-    extra: '인원 추가 1인 10,000원',
-    desc: '아늑한 분위기의 오션 전면뷰 카라반',
-  },
-  {
-    id: 'pursuit', group: 'caravan', name: '퍼슈트530-4',
-    badge: '오션 측면뷰', cover: 'images/gallery/g04.jpg',
-    std: 2, max: 4,
-    price: { normal: [100000, 150000], peak: [150000, 200000] },
-    extra: '인원 추가 1인 10,000원',
-    desc: '실속 있게 즐기는 오션 측면뷰 카라반',
-  },
-  {
-    id: 'gureum', group: 'pension', name: '구름',
-    badge: '펜션 객실', cover: 'images/gallery/g01.jpg',
-    std: 4, max: 6,
-    price: { normal: [100000, 150000], peak: [150000, 200000] },
-    extra: '인원 추가 비용 없음',
-    desc: '가족 여행에 좋은 아늑한 펜션 객실',
-  },
-  {
-    id: 'bada', group: 'pension', name: '바다',
-    badge: '펜션 객실', cover: 'images/gallery/g06.jpg',
-    std: 4, max: 6,
-    price: { normal: [100000, 150000], peak: [150000, 200000] },
-    extra: '인원 추가 비용 없음',
-    desc: '푸른 바다가 보이는 편안한 펜션 객실',
-  },
-  {
-    id: 'mujigae', group: 'pension', name: '무지개',
-    badge: '단체 추천', cover: 'images/gallery/g12.jpg',
-    std: 8, max: 12,
-    price: { normal: [200000, 300000], peak: [300000, 400000] },
-    extra: '인원 추가 비용 없음',
-    desc: '단체 모임 · 대가족에 좋은 넓은 객실',
-  },
-  {
-    id: 'deckzone', group: 'deck', name: '데크존',
-    badge: '바비큐 데크', cover: 'images/gallery/g08.jpg',
-    std: 2, max: 4,
-    price: { normal: [30000, 40000], peak: [40000, 50000] },
-    extra: '인원 추가 1인 5,000원',
-    desc: '바다를 보며 바비큐를 즐기는 야외 데크 공간',
-  },
-];
+let ROOMS = [];
+let PRICE_DATA = null;
+
+async function loadData() {
+  const res = await fetch('data/prices.json?t=' + Date.now());
+  PRICE_DATA = await res.json();
+  ROOMS = PRICE_DATA.rooms;
+}
+
+const GROUP_LABEL = { caravan: '카라반', pension: '펜션', deck: '데크존' };
 
 /* ---------- 갤러리 사진 자동 탐색 ----------
  * images/photos/ 폴더의 1.jpg, 2.jpg ... 가 자동으로 표시됩니다.
@@ -195,7 +147,7 @@ function openRoomModal(room) {
       <tr><th>비수기</th><td>${won(room.price.normal[0])}원</td><td>${won(room.price.normal[1])}원</td></tr>
       <tr><th>성수기</th><td>${won(room.price.peak[0])}원</td><td>${won(room.price.peak[1])}원</td></tr>
     </table>
-    <p class="note">2026년 성수기: 7/16 ~ 8/30, 12/31 · 주말: 금·토 및 공휴일 전날 · <b>비수기 금요일은 평일 비용</b></p>`;
+    <p class="note">${PRICE_DATA.modalNote || ''}</p>`;
 
   modal.hidden = false;
   document.body.style.overflow = 'hidden';
@@ -224,6 +176,49 @@ modal.addEventListener('click', e => {
     track.querySelectorAll('video').forEach(v => v.pause());
   }
 });
+
+/* ---------- 요금표 렌더링 ---------- */
+function renderPriceTables() {
+  // 객실 요금표 (구분 칸은 그룹별로 병합)
+  const tbody = document.getElementById('price-tbody');
+  const groupCount = {};
+  ROOMS.forEach(r => { groupCount[r.group] = (groupCount[r.group] || 0) + 1; });
+  const seen = {};
+  tbody.innerHTML = ROOMS.map(r => {
+    let groupCell = '';
+    if (!seen[r.group]) {
+      seen[r.group] = true;
+      groupCell = `<td rowspan="${groupCount[r.group]}">${GROUP_LABEL[r.group] || r.group}</td>`;
+    }
+    return `<tr>${groupCell}<td>${r.name}</td><td>${r.std}</td><td>${r.max}</td>` +
+      `<td>${won(r.price.normal[0])}</td><td>${won(r.price.normal[1])}</td>` +
+      `<td>${won(r.price.peak[0])}</td><td>${won(r.price.peak[1])}</td>` +
+      `<td>${r.extra}</td></tr>`;
+  }).join('');
+
+  // 옵션 표 (같은 이름은 칸 병합)
+  const obody = document.getElementById('option-tbody');
+  const opts = PRICE_DATA.options || [];
+  let html = '';
+  for (let i = 0; i < opts.length; i++) {
+    let nameCell = '';
+    if (i === 0 || opts[i].name !== opts[i - 1].name) {
+      let span = 1;
+      while (i + span < opts.length && opts[i + span].name === opts[i].name) span++;
+      nameCell = `<td rowspan="${span}">${opts[i].name}</td>`;
+    }
+    const price = opts[i].price === '무료' ? '<strong>무료</strong>' : opts[i].price;
+    html += `<tr>${nameCell}<td>${opts[i].detail}</td><td>${price}</td></tr>`;
+  }
+  if (PRICE_DATA.optionNote) {
+    html += `<tr><td colspan="3" class="option-note">${PRICE_DATA.optionNote}</td></tr>`;
+  }
+  obody.innerHTML = html;
+
+  // 안내 문구
+  document.getElementById('price-notes').innerHTML =
+    (PRICE_DATA.notes || []).map(n => `<li>${n}</li>`).join('');
+}
 
 /* ---------- 갤러리 + 라이트박스 ---------- */
 function renderGallery() {
@@ -300,5 +295,8 @@ document.getElementById('copy-addr').addEventListener('click', async () => {
 });
 
 /* ---------- 초기화 ---------- */
-renderRooms();
+loadData().then(() => {
+  renderRooms();
+  renderPriceTables();
+});
 probeGallery().then(renderGallery);

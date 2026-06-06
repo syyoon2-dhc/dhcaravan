@@ -100,7 +100,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def end_headers(self):
         # 객실 사진/영상과 API 는 항상 최신으로
-        if self.path.startswith(('/images/rooms/', '/images/photos/', '/api/')):
+        if self.path.startswith(('/images/rooms/', '/images/photos/', '/data/', '/api/')):
             self.send_header('Cache-Control', 'no-store')
         super().end_headers()
 
@@ -163,6 +163,20 @@ class Handler(SimpleHTTPRequestHandler):
 
         if not self._authed():
             return self._json(401, {'error': '로그인이 필요합니다'})
+
+        # ---------- 요금 저장 ----------
+        if parsed.path == '/api/prices':
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+                data = json.loads(self.rfile.read(length).decode('utf-8'))
+            except (ValueError, json.JSONDecodeError):
+                return self._json(400, {'error': '잘못된 요금 데이터'})
+            if 'rooms' not in data:
+                return self._json(400, {'error': '잘못된 요금 데이터'})
+            os.makedirs(os.path.join(ROOT, 'data'), exist_ok=True)
+            with open(os.path.join(ROOT, 'data', 'prices.json'), 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            return self._json(200, {'ok': True})
 
         room, d = self._room_dir(query)
         if not room:

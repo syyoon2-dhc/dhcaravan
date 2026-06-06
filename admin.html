@@ -46,6 +46,24 @@
   .bar i { display:block; height:100%; width:0; background:var(--blue); transition:width .2s; }
   .progress p { font-size:13px; color:var(--gray); margin-top:6px; }
 
+  /* 요금 편집기 */
+  .pe-room { border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px; }
+  .pe-room h3 { font-size:15px; margin-bottom:10px; }
+  .pe-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+  .pe-field label { display:block; font-size:12px; color:var(--gray); margin-bottom:3px; }
+  .pe-field input { width:100%; padding:9px 10px; border:1.5px solid var(--line); border-radius:8px; font-size:14.5px; font-family:inherit; }
+  .pe-field input:focus { outline:none; border-color:var(--blue); }
+  .pe-field.wide { grid-column:1 / -1; }
+  .pe-sub { font-size:13px; font-weight:700; color:var(--blue-deep); margin:10px 0 6px; }
+  .pe-opt-row { display:grid; grid-template-columns:1fr 1.4fr .8fr 34px; gap:6px; margin-bottom:6px; align-items:center; }
+  .pe-opt-row input { padding:8px 9px; border:1.5px solid var(--line); border-radius:8px; font-size:13.5px; font-family:inherit; width:100%; }
+  .pe-opt-del { width:30px; height:30px; border:0; border-radius:50%; background:#fdeaea; color:#c22; font-weight:700; cursor:pointer; }
+  .pe-add { border:1.5px dashed #b9d4e6; background:var(--sky); color:var(--blue-deep); border-radius:8px; padding:9px; width:100%; font-size:13.5px; font-weight:700; cursor:pointer; margin-top:4px; }
+  .pe-notes { width:100%; min-height:110px; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; font-size:13.5px; font-family:inherit; line-height:1.6; }
+  .save-btn { display:block; width:100%; padding:15px; margin-top:14px; border:0; border-radius:12px; background:var(--blue); color:#fff; font-size:16px; font-weight:800; cursor:pointer; font-family:inherit; }
+  .save-btn:active { background:var(--blue-deep); }
+  .save-btn:disabled { opacity:.55; }
+
   .toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:var(--ink); color:#fff;
     padding:11px 22px; border-radius:50px; font-size:14px; opacity:0; pointer-events:none; transition:.3s; white-space:nowrap; z-index:99; }
   .toast.show { opacity:1; }
@@ -108,6 +126,13 @@
     </label>
     <div class="progress" id="video-progress"><div class="bar"><i id="video-bar"></i></div><p id="video-msg"></p></div>
     <p class="hint">· 동영상은 자동으로 <b>720p로 압축</b>되어 저장됩니다 (휴대폰 원본 그대로 올려도 OK).<br>· 새 동영상을 올리면 기존 동영상이 교체됩니다.</p>
+  </div>
+
+  <div class="card" id="price-card">
+    <h2>💰 요금 관리 <small>(모든 객실 공통)</small></h2>
+    <div id="price-editor"><div class="empty">불러오는 중...</div></div>
+    <button class="save-btn" id="save-prices">💾 요금 저장</button>
+    <p class="hint" id="price-hint">· 금액은 숫자만 입력하세요 (예: 120000).<br>· 저장하면 홈페이지 요금표와 객실 팝업에 모두 반영됩니다.</p>
   </div>
 </div>
 
@@ -296,6 +321,7 @@ $('login-form').addEventListener('submit', async e => {
       $('login-pw').value = '';
       hideLogin();
       loadMedia();
+      loadPrices();
     } else {
       $('login-err').textContent = '토큰이 올바르지 않습니다';
     }
@@ -314,6 +340,7 @@ $('login-form').addEventListener('submit', async e => {
     $('login-pw').value = '';
     hideLogin();
     loadMedia();
+    loadPrices();
   } catch {
     $('login-err').textContent = '서버에 연결할 수 없습니다 (server.py 실행 확인)';
   }
@@ -532,14 +559,131 @@ $('video-input').addEventListener('change', e => {
   xhr.send(file);
 });
 
+/* ---------- 요금 관리 ---------- */
+let priceData = null;
+let priceSha = null; // 원격 모드: GitHub 파일 버전
+
+const escAttr = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+async function loadPrices() {
+  try {
+    if (MODE === 'remote') {
+      const res = await gh(`contents/data/prices.json?ref=${BRANCH}&t=${Date.now()}`);
+      if (!res.ok) throw new Error('요금 데이터를 불러올 수 없습니다');
+      const meta = await res.json();
+      priceSha = meta.sha;
+      const bytes = Uint8Array.from(atob(meta.content.replace(/\n/g, '')), c => c.charCodeAt(0));
+      priceData = JSON.parse(new TextDecoder().decode(bytes));
+    } else {
+      const res = await fetch('/data/prices.json?t=' + Date.now());
+      priceData = await res.json();
+    }
+    renderPriceEditor();
+  } catch (err) {
+    $('price-editor').innerHTML = `<div class="empty">⚠️ ${err.message}</div>`;
+  }
+}
+
+function peOptRow(o) {
+  return `<div class="pe-opt-row">
+    <input data-ok="name" placeholder="구분" value="${escAttr(o.name || '')}">
+    <input data-ok="detail" placeholder="내용" value="${escAttr(o.detail || '')}">
+    <input data-ok="price" placeholder="요금" value="${escAttr(o.price || '')}">
+    <button class="pe-opt-del" type="button" title="옵션 삭제">✕</button>
+  </div>`;
+}
+
+function renderPriceEditor() {
+  const box = $('price-editor');
+  let html = '';
+  priceData.rooms.forEach((r, i) => {
+    html += `
+    <div class="pe-room" data-i="${i}">
+      <h3>${r.name} <small style="color:var(--gray);font-weight:500">(${r.badge})</small></h3>
+      <div class="pe-grid">
+        <div class="pe-field"><label>기준 인원</label><input data-k="std" type="number" value="${r.std}"></div>
+        <div class="pe-field"><label>최대 인원</label><input data-k="max" type="number" value="${r.max}"></div>
+        <div class="pe-field"><label>비수기 평일 (원)</label><input data-k="n0" type="number" value="${r.price.normal[0]}"></div>
+        <div class="pe-field"><label>비수기 주말 (원)</label><input data-k="n1" type="number" value="${r.price.normal[1]}"></div>
+        <div class="pe-field"><label>성수기 평일 (원)</label><input data-k="p0" type="number" value="${r.price.peak[0]}"></div>
+        <div class="pe-field"><label>성수기 주말 (원)</label><input data-k="p1" type="number" value="${r.price.peak[1]}"></div>
+        <div class="pe-field wide"><label>비고 (인원 추가 비용 등)</label><input data-k="extra" type="text" value="${escAttr(r.extra)}"></div>
+      </div>
+    </div>`;
+  });
+  html += `<p class="pe-sub">옵션 요금 (월광보합 · 바비큐 장비 등)</p><div id="pe-options">`;
+  (priceData.options || []).forEach(o => { html += peOptRow(o); });
+  html += `</div><button class="pe-add" id="pe-add-opt" type="button">＋ 옵션 추가</button>`;
+  html += `<p class="pe-sub">옵션 공통 안내 문구</p>
+    <div class="pe-field"><input id="pe-optnote" type="text" value="${escAttr(priceData.optionNote || '')}"></div>`;
+  html += `<p class="pe-sub">요금 안내 문구 (한 줄에 하나씩, 굵게는 &lt;strong&gt;문구&lt;/strong&gt;)</p>
+    <textarea class="pe-notes" id="pe-notes">${(priceData.notes || []).join('\n')}</textarea>`;
+  html += `<p class="pe-sub">객실 팝업 하단 문구</p>
+    <div class="pe-field"><input id="pe-modalnote" type="text" value="${escAttr(priceData.modalNote || '')}"></div>`;
+  box.innerHTML = html;
+
+  $('pe-add-opt').onclick = () => {
+    const div = document.createElement('div');
+    div.innerHTML = peOptRow({});
+    $('pe-options').appendChild(div.firstElementChild);
+  };
+  $('pe-options').addEventListener('click', e => {
+    if (e.target.classList.contains('pe-opt-del')) e.target.closest('.pe-opt-row').remove();
+  });
+}
+
+async function savePrices() {
+  if (!priceData) return;
+  const btn = $('save-prices');
+
+  document.querySelectorAll('.pe-room').forEach(div => {
+    const r = priceData.rooms[+div.dataset.i];
+    const g = k => div.querySelector(`[data-k="${k}"]`).value;
+    r.std = parseInt(g('std')) || 0;
+    r.max = parseInt(g('max')) || 0;
+    r.price.normal = [parseInt(g('n0')) || 0, parseInt(g('n1')) || 0];
+    r.price.peak = [parseInt(g('p0')) || 0, parseInt(g('p1')) || 0];
+    r.extra = g('extra').trim();
+  });
+  priceData.options = [...document.querySelectorAll('.pe-opt-row')].map(row => ({
+    name: row.querySelector('[data-ok="name"]').value.trim(),
+    detail: row.querySelector('[data-ok="detail"]').value.trim(),
+    price: row.querySelector('[data-ok="price"]').value.trim(),
+  })).filter(o => o.name || o.detail || o.price);
+  priceData.optionNote = $('pe-optnote').value.trim();
+  priceData.notes = $('pe-notes').value.split('\n').map(s => s.trim()).filter(Boolean);
+  priceData.modalNote = $('pe-modalnote').value.trim();
+
+  btn.disabled = true; btn.textContent = '저장 중...';
+  try {
+    if (MODE === 'remote') {
+      const jsonStr = JSON.stringify(priceData, null, 2);
+      const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(jsonStr)));
+      const r = await putFile('data/prices.json', b64, '요금 수정', priceSha);
+      priceSha = r.content.sha;
+      toast('요금 저장 완료! 1~2분 후 사이트 반영');
+    } else {
+      const res = await fetch('/api/prices', {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(priceData),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || '저장 실패');
+      toast('요금 저장 완료!');
+    }
+  } catch (err) { toast('⚠️ ' + err.message); }
+  btn.disabled = false; btn.textContent = '💾 요금 저장';
+}
+$('save-prices').addEventListener('click', savePrices);
+
 /* ---------- 초기화 ---------- */
 updateChips();
 (async () => {
   MODE = await detectMode();
   if (MODE === 'local') {
-    if (TOKEN) { hideLogin(); loadMedia(); } else showLogin();
+    if (TOKEN) { hideLogin(); loadMedia(); loadPrices(); } else showLogin();
   } else {
-    if (await ghCheck()) { hideLogin(); loadMedia(); } else showLogin();
+    if (await ghCheck()) { hideLogin(); loadMedia(); loadPrices(); } else showLogin();
   }
 })();
 </script>
