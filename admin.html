@@ -128,6 +128,27 @@
     <p class="hint">· 동영상은 자동으로 <b>720p로 압축</b>되어 저장됩니다 (휴대폰 원본 그대로 올려도 OK).<br>· 새 동영상을 올리면 기존 동영상이 교체됩니다.</p>
   </div>
 
+  <div class="card" id="popup-card">
+    <h2>📢 팝업 관리 <small>(이벤트 · 할인 홍보)</small></h2>
+    <div class="pe-field" style="margin-bottom:12px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:var(--ink);cursor:pointer">
+        <input type="checkbox" id="pp-enabled" style="width:18px;height:18px"> 홈페이지에 팝업 표시하기
+      </label>
+    </div>
+    <div class="pe-field" style="margin-bottom:10px"><label>제목</label><input id="pp-title" type="text" placeholder="예: 오픈 기념 할인 이벤트!"></div>
+    <div class="pe-field" style="margin-bottom:10px"><label>내용 (줄바꿈 그대로 표시됩니다)</label><textarea class="pe-notes" id="pp-body" style="min-height:80px" placeholder="예: 전 객실 10% 할인&#10;기간: 7월 한 달간"></textarea></div>
+    <div class="pe-field" style="margin-bottom:10px"><label>링크 주소 (선택 — 버튼 클릭 시 이동)</label><input id="pp-link" type="text" placeholder="예: https://m.thankqcamping.com/..."></div>
+    <div class="pe-field" style="margin-bottom:10px"><label>링크 버튼 문구</label><input id="pp-linktext" type="text" placeholder="예: 예약하러 가기"></div>
+    <div class="pe-field"><label>팝업 이미지 (선택)</label>
+      <div id="pp-img-area" style="margin:6px 0"></div>
+      <label class="upload-btn" style="padding:11px;font-size:14px">🖼️ 이미지 선택 (자동 압축)
+        <input type="file" id="pp-img-input" accept="image/*">
+      </label>
+    </div>
+    <button class="save-btn" id="save-popup">💾 팝업 저장</button>
+    <p class="hint">· 저장하면 홈페이지 접속 시 팝업이 표시됩니다.<br>· 방문자가 "오늘 하루 보지 않기"를 누르면 그 기기에서 24시간 동안 숨겨집니다.</p>
+  </div>
+
   <div class="card" id="price-card">
     <h2>💰 요금 관리 <small>(모든 객실 공통)</small></h2>
     <div id="price-editor"><div class="empty">불러오는 중...</div></div>
@@ -322,6 +343,7 @@ $('login-form').addEventListener('submit', async e => {
       hideLogin();
       loadMedia();
       loadPrices();
+      loadPopupAdmin();
     } else {
       $('login-err').textContent = '토큰이 올바르지 않습니다';
     }
@@ -341,6 +363,7 @@ $('login-form').addEventListener('submit', async e => {
     hideLogin();
     loadMedia();
     loadPrices();
+    loadPopupAdmin();
   } catch {
     $('login-err').textContent = '서버에 연결할 수 없습니다 (server.py 실행 확인)';
   }
@@ -676,14 +699,116 @@ async function savePrices() {
 }
 $('save-prices').addEventListener('click', savePrices);
 
+/* ---------- 팝업 관리 ---------- */
+let popupData = null;
+let popupSha = null;     // 원격: popup.json 버전
+let popupImgSha = null;  // 원격: popup.jpg 버전
+let popupImgPending = null; // 저장 전 새로 선택한 이미지 blob
+
+async function loadPopupAdmin() {
+  try {
+    if (MODE === 'remote') {
+      const res = await gh(`contents/data/popup.json?ref=${BRANCH}&t=${Date.now()}`);
+      if (!res.ok) throw new Error('팝업 데이터를 불러올 수 없습니다');
+      const meta = await res.json();
+      popupSha = meta.sha;
+      const bytes = Uint8Array.from(atob(meta.content.replace(/\n/g, '')), c => c.charCodeAt(0));
+      popupData = JSON.parse(new TextDecoder().decode(bytes));
+      const imgRes = await gh(`contents/images/popup.jpg?ref=${BRANCH}&t=${Date.now()}`);
+      popupImgSha = imgRes.ok ? (await imgRes.json()).sha : null;
+    } else {
+      const res = await fetch('/data/popup.json?t=' + Date.now());
+      popupData = await res.json();
+    }
+  } catch {
+    popupData = { enabled: false, title: '', body: '', image: '', link: '', linkText: '' };
+  }
+  $('pp-enabled').checked = !!popupData.enabled;
+  $('pp-title').value = popupData.title || '';
+  $('pp-body').value = popupData.body || '';
+  $('pp-link').value = popupData.link || '';
+  $('pp-linktext').value = popupData.linkText || '';
+  renderPopupImg();
+}
+
+function renderPopupImg() {
+  const area = $('pp-img-area');
+  if (popupImgPending) {
+    area.innerHTML = `<img src="${URL.createObjectURL(popupImgPending)}" style="max-width:200px;border-radius:10px"><p style="font-size:12.5px;color:var(--gray)">저장 버튼을 누르면 업로드됩니다</p>`;
+  } else if (popupData && popupData.image) {
+    const src = MODE === 'remote'
+      ? `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${popupData.image}?t=${Date.now()}`
+      : `/${popupData.image}?t=${Date.now()}`;
+    area.innerHTML = `<img src="${src}" style="max-width:200px;border-radius:10px"><br><button type="button" id="pp-img-del" style="border:0;background:#fdeaea;color:#c22;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;margin-top:6px">이미지 제거</button>`;
+    const del = area.querySelector('#pp-img-del');
+    if (del) del.onclick = () => { popupData.image = ''; popupImgPending = null; renderPopupImg(); };
+  } else {
+    area.innerHTML = '<p style="font-size:13px;color:var(--gray)">등록된 이미지가 없습니다.</p>';
+  }
+}
+
+$('pp-img-input').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    popupImgPending = await compressImage(file, 1200, 0.85);
+    renderPopupImg();
+  } catch (err) { toast('⚠️ ' + err.message); }
+});
+
+async function savePopup() {
+  if (!popupData) return;
+  const btn = $('save-popup');
+  btn.disabled = true; btn.textContent = '저장 중...';
+  try {
+    // 새 이미지가 선택되어 있으면 먼저 업로드
+    if (popupImgPending) {
+      if (MODE === 'remote') {
+        const r = await putFile('images/popup.jpg', await blobToBase64(popupImgPending), '팝업 이미지', popupImgSha);
+        popupImgSha = r.content.sha;
+      } else {
+        const res = await fetch('/api/upload-popup', { method: 'POST', headers: authHeaders(), body: popupImgPending });
+        if (!res.ok) throw new Error('이미지 업로드 실패');
+      }
+      popupData.image = 'images/popup.jpg';
+      popupImgPending = null;
+    }
+    popupData.enabled = $('pp-enabled').checked;
+    popupData.title = $('pp-title').value.trim();
+    popupData.body = $('pp-body').value;
+    popupData.link = $('pp-link').value.trim();
+    popupData.linkText = $('pp-linktext').value.trim();
+
+    if (MODE === 'remote') {
+      const jsonStr = JSON.stringify(popupData, null, 2);
+      const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(jsonStr)));
+      const r = await putFile('data/popup.json', b64, '팝업 수정', popupSha);
+      popupSha = r.content.sha;
+      toast('팝업 저장 완료! 1~2분 후 사이트 반영');
+    } else {
+      const res = await fetch('/api/popup', {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(popupData),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || '저장 실패');
+      toast('팝업 저장 완료!');
+    }
+    renderPopupImg();
+  } catch (err) { toast('⚠️ ' + err.message); }
+  btn.disabled = false; btn.textContent = '💾 팝업 저장';
+}
+$('save-popup').addEventListener('click', savePopup);
+
 /* ---------- 초기화 ---------- */
 updateChips();
 (async () => {
   MODE = await detectMode();
   if (MODE === 'local') {
-    if (TOKEN) { hideLogin(); loadMedia(); loadPrices(); } else showLogin();
+    if (TOKEN) { hideLogin(); loadMedia(); loadPrices(); loadPopupAdmin(); } else showLogin();
   } else {
-    if (await ghCheck()) { hideLogin(); loadMedia(); loadPrices(); } else showLogin();
+    if (await ghCheck()) { hideLogin(); loadMedia(); loadPrices(); loadPopupAdmin(); } else showLogin();
   }
 })();
 </script>

@@ -240,6 +240,24 @@
   <button class="slider-btn next" id="lb-next" aria-label="다음">›</button>
 </div>
 
+<!-- ===== 홍보 팝업 (admin에서 관리) ===== -->
+<div class="popup" id="promo-popup" hidden>
+  <div class="popup-backdrop" data-pclose></div>
+  <div class="popup-box">
+    <button class="popup-close" data-pclose aria-label="닫기">✕</button>
+    <img id="popup-img" src="" alt="이벤트 이미지" hidden>
+    <div class="popup-body">
+      <h3 id="popup-title"></h3>
+      <p id="popup-text"></p>
+      <a id="popup-link" class="btn btn-primary" target="_blank" rel="noopener" hidden></a>
+    </div>
+    <div class="popup-foot">
+      <label><input type="checkbox" id="popup-today"> 오늘 하루 보지 않기</label>
+      <button id="popup-close-btn" data-pclose>닫기</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/main.js"></script>
 </body>
 </html>

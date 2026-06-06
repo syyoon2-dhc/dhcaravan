@@ -294,9 +294,42 @@ document.getElementById('copy-addr').addEventListener('click', async () => {
   } catch { /* http 환경 등에서 클립보드 미지원 시 무시 */ }
 });
 
+/* ---------- 홍보 팝업 ----------
+ * data/popup.json 을 admin 페이지에서 수정하면 표시됩니다.
+ * "오늘 하루 보지 않기"는 기기별(localStorage)로 24시간 숨김.
+ */
+async function loadPopup() {
+  try {
+    const res = await fetch('data/popup.json?t=' + Date.now());
+    if (!res.ok) return;
+    const p = await res.json();
+    if (!p.enabled) return;
+    if (Date.now() < (+localStorage.getItem('dhc_popup_hide') || 0)) return;
+
+    const popup = document.getElementById('promo-popup');
+    document.getElementById('popup-title').textContent = p.title || '';
+    document.getElementById('popup-text').textContent = p.body || '';
+    const img = document.getElementById('popup-img');
+    if (p.image) { img.src = p.image + '?t=' + Date.now(); img.hidden = false; }
+    const link = document.getElementById('popup-link');
+    if (p.link) { link.href = p.link; link.textContent = p.linkText || '자세히 보기'; link.hidden = false; }
+
+    popup.hidden = false;
+    popup.addEventListener('click', e => {
+      if (e.target.hasAttribute('data-pclose')) {
+        if (document.getElementById('popup-today').checked) {
+          localStorage.setItem('dhc_popup_hide', Date.now() + 24 * 60 * 60 * 1000);
+        }
+        popup.hidden = true;
+      }
+    });
+  } catch { /* 팝업 데이터 없으면 표시 안 함 */ }
+}
+
 /* ---------- 초기화 ---------- */
 loadData().then(() => {
   renderRooms();
   renderPriceTables();
 });
 probeGallery().then(renderGallery);
+loadPopup();

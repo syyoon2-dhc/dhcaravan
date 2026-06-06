@@ -228,6 +228,30 @@ a { color: inherit; text-decoration: none; }
 .lightbox .slider-btn { background: rgba(255,255,255,.18); color: #fff; }
 .lightbox .slider-btn:hover { background: rgba(255,255,255,.35); }
 
+/* ---------- 홍보 팝업 ---------- */
+.popup { position: fixed; inset: 0; z-index: 400; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.popup[hidden] { display: none; }
+.popup-backdrop { position: absolute; inset: 0; background: rgba(8, 25, 40, .6); }
+.popup-box {
+  position: relative; background: #fff; border-radius: 18px; max-width: 420px; width: 100%;
+  max-height: 88vh; overflow-y: auto; box-shadow: 0 24px 80px rgba(0,0,0,.45); overflow-x: hidden;
+}
+.popup-close {
+  position: absolute; top: 10px; right: 10px; z-index: 5; width: 34px; height: 34px; border-radius: 50%;
+  border: 0; background: rgba(0,0,0,.45); color: #fff; font-size: 15px; cursor: pointer;
+}
+.popup-box > img { width: 100%; display: block; }
+.popup-body { padding: 24px 24px 20px; text-align: center; }
+.popup-body h3 { font-size: 21px; font-weight: 800; margin-bottom: 10px; color: var(--blue-deep); }
+.popup-body p { color: var(--ink); font-size: 15.5px; white-space: pre-line; }
+.popup-body .btn { margin-top: 16px; padding: 11px 26px; font-size: 15px; }
+.popup-foot {
+  display: flex; justify-content: space-between; align-items: center; padding: 12px 18px;
+  border-top: 1px solid var(--line); background: #f7fafc; font-size: 13.5px; color: var(--gray);
+}
+.popup-foot label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.popup-foot button { border: 0; background: none; font-size: 14px; font-weight: 700; color: var(--ink); cursor: pointer; padding: 6px 10px; }
+
 /* ---------- 반응형 ---------- */
 @media (max-width: 920px) {
   .features { grid-template-columns: repeat(2, 1fr); }

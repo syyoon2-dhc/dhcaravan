@@ -100,7 +100,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def end_headers(self):
         # 객실 사진/영상과 API 는 항상 최신으로
-        if self.path.startswith(('/images/rooms/', '/images/photos/', '/data/', '/api/')):
+        if self.path.startswith(('/images/rooms/', '/images/photos/', '/images/popup', '/data/', '/api/')):
             self.send_header('Cache-Control', 'no-store')
         super().end_headers()
 
@@ -177,6 +177,33 @@ class Handler(SimpleHTTPRequestHandler):
             with open(os.path.join(ROOT, 'data', 'prices.json'), 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             return self._json(200, {'ok': True})
+
+        # ---------- 팝업 저장 ----------
+        if parsed.path == '/api/popup':
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+                data = json.loads(self.rfile.read(length).decode('utf-8'))
+            except (ValueError, json.JSONDecodeError):
+                return self._json(400, {'error': '잘못된 팝업 데이터'})
+            if 'enabled' not in data:
+                return self._json(400, {'error': '잘못된 팝업 데이터'})
+            os.makedirs(os.path.join(ROOT, 'data'), exist_ok=True)
+            with open(os.path.join(ROOT, 'data', 'popup.json'), 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            return self._json(200, {'ok': True})
+
+        # ---------- 팝업 이미지 업로드 ----------
+        if parsed.path == '/api/upload-popup':
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+            except ValueError:
+                length = 0
+            if length <= 0 or length > MAX_PHOTO:
+                return self._json(400, {'error': '잘못된 이미지'})
+            data = self.rfile.read(length)
+            with open(os.path.join(ROOT, 'images', 'popup.jpg'), 'wb') as f:
+                f.write(data)
+            return self._json(200, {'ok': True, 'path': 'images/popup.jpg'})
 
         room, d = self._room_dir(query)
         if not room:
