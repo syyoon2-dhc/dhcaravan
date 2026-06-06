@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>사진 관리 — 동해카라반펜션</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root { --blue:#0e6ba8; --blue-deep:#0a4d7a; --sky:#e8f4fb; --ink:#1d2b36; --gray:#5f7382; --line:#e3ebf1; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Pretendard',-apple-system,'Malgun Gothic',sans-serif; color:var(--ink); background:#f4f8fb; padding-bottom:60px; }
+  .top { background:var(--blue); color:#fff; padding:16px 20px; display:flex; align-items:center; justify-content:space-between; }
+  .top h1 { font-size:19px; }
+  .top a { color:#fff; font-size:14px; text-decoration:none; background:rgba(255,255,255,.18); padding:7px 14px; border-radius:50px; }
+  .wrap { max-width:680px; margin:0 auto; padding:20px 16px; }
+
+  .rooms { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px; }
+  .rooms button { padding:9px 16px; border-radius:50px; border:1.5px solid var(--line); background:#fff; font-size:14.5px; font-weight:600; cursor:pointer; }
+  .rooms button.on { background:var(--blue); border-color:var(--blue); color:#fff; }
+
+  .card { background:#fff; border-radius:14px; padding:20px; margin-bottom:16px; box-shadow:0 3px 14px rgba(13,60,97,.07); }
+  .card h2 { font-size:16.5px; margin-bottom:12px; }
+  .card h2 small { color:var(--gray); font-weight:500; font-size:13px; }
+
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .ph { position:relative; aspect-ratio:4/3; border-radius:10px; overflow:hidden; background:var(--sky); }
+  .ph img { width:100%; height:100%; object-fit:cover; display:block; }
+  .ph .no { position:absolute; top:6px; left:6px; background:rgba(0,0,0,.55); color:#fff; font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:50px; }
+  .ph .del { position:absolute; top:6px; right:6px; width:26px; height:26px; border-radius:50%; border:0; background:rgba(220,40,40,.9); color:#fff; font-size:13px; cursor:pointer; line-height:1; }
+  .empty { color:var(--gray); font-size:14px; padding:14px 0; text-align:center; }
+
+  .upload-btn { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:16px; margin-top:14px;
+    border:2px dashed #b9d4e6; border-radius:12px; background:var(--sky); color:var(--blue-deep); font-size:15.5px; font-weight:700; cursor:pointer; }
+  .upload-btn:active { background:#d8ecf8; }
+  input[type=file] { display:none; }
+
+  .video-box { display:flex; align-items:center; gap:12px; }
+  .video-box video { width:170px; border-radius:10px; background:#000; }
+  .video-meta { flex:1; font-size:14px; color:var(--gray); }
+  .btn-del-video { border:0; background:#fdeaea; color:#c22; font-weight:700; padding:8px 14px; border-radius:8px; cursor:pointer; font-size:13.5px; }
+
+  .progress { margin-top:12px; display:none; }
+  .progress.show { display:block; }
+  .bar { height:10px; background:#e3edf4; border-radius:6px; overflow:hidden; }
+  .bar i { display:block; height:100%; width:0; background:var(--blue); transition:width .2s; }
+  .progress p { font-size:13px; color:var(--gray); margin-top:6px; }
+
+  .toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:var(--ink); color:#fff;
+    padding:11px 22px; border-radius:50px; font-size:14px; opacity:0; pointer-events:none; transition:.3s; white-space:nowrap; z-index:99; }
+  .toast.show { opacity:1; }
+  .hint { font-size:13px; color:var(--gray); margin-top:10px; line-height:1.55; }
+
+  /* 로그인 화면 */
+  .login-overlay { position:fixed; inset:0; background:#f4f8fb; z-index:50; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .login-overlay[hidden] { display:none; }
+  .login-box { background:#fff; border-radius:16px; padding:36px 30px; width:100%; max-width:360px; box-shadow:0 10px 40px rgba(13,60,97,.15); text-align:center; }
+  .login-box h2 { font-size:20px; margin-bottom:6px; }
+  .login-box .sub { color:var(--gray); font-size:14px; margin-bottom:22px; }
+  .login-box input { width:100%; padding:13px 16px; margin-bottom:10px; border:1.5px solid var(--line); border-radius:10px; font-size:15.5px; font-family:inherit; }
+  .login-box input:focus { outline:none; border-color:var(--blue); }
+  .login-box button { width:100%; padding:14px; border:0; border-radius:10px; background:var(--blue); color:#fff; font-size:16px; font-weight:700; cursor:pointer; margin-top:6px; }
+  .login-box button:active { background:var(--blue-deep); }
+  .login-err { color:#c22; font-size:13.5px; min-height:18px; margin-top:10px; }
+  .logout-btn { background:rgba(255,255,255,.18); border:0; color:#fff; font-size:13px; padding:7px 14px; border-radius:50px; cursor:pointer; margin-left:8px; font-family:inherit; }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>📷 사진 관리</h1>
+  <span><a href="index.html">홈페이지 보기 →</a><button class="logout-btn" id="logout-btn" hidden>로그아웃</button></span>
+</div>
+
+<!-- 로그인 화면 -->
+<div class="login-overlay" id="login-overlay">
+  <form class="login-box" id="login-form">
+    <h2>🔒 관리자 로그인</h2>
+    <p class="sub">동해카라반펜션 사진 관리</p>
+    <input type="text" id="login-id" placeholder="아이디" autocomplete="username" required>
+    <input type="password" id="login-pw" placeholder="비밀번호" autocomplete="current-password" required>
+    <button type="submit">로그인</button>
+    <p class="login-err" id="login-err"></p>
+  </form>
+</div>
+
+<div class="wrap">
+  <div class="rooms" id="rooms"></div>
+
+  <div class="card">
+    <h2><span id="photo-title">객실 사진</span> <small id="photo-count"></small></h2>
+    <div class="grid" id="photo-grid"></div>
+    <div class="empty" id="photo-empty" hidden>아직 사진이 없습니다. 아래 버튼으로 추가하세요.</div>
+    <label class="upload-btn">
+      ➕ 사진 추가 (여러 장 선택 가능)
+      <input type="file" id="photo-input" accept="image/*" multiple>
+    </label>
+    <div class="progress" id="photo-progress"><div class="bar"><i id="photo-bar"></i></div><p id="photo-msg"></p></div>
+    <p class="hint">· 사진은 자동으로 <b>가로 1600px / 용량 약 200~400KB</b>로 줄여서 저장됩니다.<br>· 첫 번째 사진이 객실 카드의 대표 사진이 됩니다.</p>
+  </div>
+
+  <div class="card" id="video-card">
+    <h2>객실 동영상 <small>(객실당 1개)</small></h2>
+    <div id="video-area"><div class="empty">등록된 동영상이 없습니다.</div></div>
+    <label class="upload-btn">
+      🎬 동영상 업로드 (mp4)
+      <input type="file" id="video-input" accept="video/mp4,video/*">
+    </label>
+    <div class="progress" id="video-progress"><div class="bar"><i id="video-bar"></i></div><p id="video-msg"></p></div>
+    <p class="hint">· 동영상은 압축 없이 그대로 올라갑니다. <b>1~2분, 100MB 이하</b>를 권장합니다.<br>· 새 동영상을 올리면 기존 동영상이 교체됩니다.</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const ROOMS = [
+  { id: 'gallery',  name: '🖼️ 갤러리' },
+  { id: 'adora',    name: '아도라542UL' },
+  { id: 'harby',    name: '하비495WFB' },
+  { id: 'pursuit',  name: '퍼슈트530-4' },
+  { id: 'gureum',   name: '구름' },
+  { id: 'bada',     name: '바다' },
+  { id: 'mujigae',  name: '무지개' },
+  { id: 'deckzone', name: '데크존' },
+];
+let current = ROOMS[0].id;
+
+const $ = id => document.getElementById(id);
+
+/* ---------- 로그인 / 인증 ---------- */
+let TOKEN = sessionStorage.getItem('dhc_token') || '';
+
+function authHeaders() { return { 'X-Auth-Token': TOKEN }; }
+
+function showLogin() {
+  $('login-overlay').hidden = false;
+  $('logout-btn').hidden = true;
+  setTimeout(() => $('login-id').focus(), 50);
+}
+function hideLogin() {
+  $('login-overlay').hidden = true;
+  $('logout-btn').hidden = false;
+}
+
+$('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('login-err').textContent = '';
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: $('login-id').value.trim(), pw: $('login-pw').value }),
+    });
+    const data = await res.json();
+    if (!res.ok) { $('login-err').textContent = data.error || '로그인 실패'; return; }
+    TOKEN = data.token;
+    sessionStorage.setItem('dhc_token', TOKEN);
+    $('login-pw').value = '';
+    hideLogin();
+    loadMedia();
+  } catch {
+    $('login-err').textContent = '서버에 연결할 수 없습니다 (server.py 실행 확인)';
+  }
+});
+
+$('logout-btn').addEventListener('click', () => {
+  TOKEN = '';
+  sessionStorage.removeItem('dhc_token');
+  showLogin();
+});
+
+/* ---------- 객실 선택 ---------- */
+ROOMS.forEach(r => {
+  const b = document.createElement('button');
+  b.textContent = r.name;
+  b.dataset.id = r.id;
+  b.onclick = () => { current = r.id; updateChips(); loadMedia(); };
+  $('rooms').appendChild(b);
+});
+function updateChips() {
+  $('rooms').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.id === current));
+}
+
+/* ---------- 토스트 ---------- */
+let toastTimer;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ---------- 현재 미디어 불러오기 ---------- */
+const mediaDir = () => current === 'gallery' ? '/images/photos' : `/images/rooms/${current}`;
+
+async function loadMedia() {
+  const isGallery = current === 'gallery';
+  $('photo-title').textContent = isGallery ? '갤러리 사진' : '객실 사진';
+  $('video-card').style.display = isGallery ? 'none' : '';
+
+  let data;
+  try {
+    const res = await fetch(`/api/media?room=${current}`, { headers: authHeaders() });
+    if (res.status === 401) { showLogin(); return; }
+    if (!res.ok) throw new Error();
+    data = await res.json();
+  } catch {
+    // 인터넷에 배포된 사이트에서는 업로드 서버가 없으므로 안내만 표시
+    document.querySelector('.wrap').innerHTML =
+      '<div class="card"><h2>⚠️ 사용할 수 없습니다</h2><p style="color:var(--gray);font-size:14.5px;margin-top:8px;">' +
+      '사진 관리는 펜션 PC에서 서버(server.py)를 켠 상태에서만 사용할 수 있습니다.<br>' +
+      'PC에서 사진을 변경한 뒤 배포를 갱신하면 이 사이트에 반영됩니다.</p></div>';
+    return;
+  }
+
+  // 사진
+  const grid = $('photo-grid');
+  grid.innerHTML = '';
+  $('photo-empty').hidden = data.photos.length > 0;
+  $('photo-count').textContent = data.photos.length ? `${data.photos.length}장` : '';
+  data.photos.forEach((f, i) => {
+    const div = document.createElement('div');
+    div.className = 'ph';
+    div.innerHTML = `
+      <img src="${mediaDir()}/${f}?t=${Date.now()}" alt="${i + 1}번 사진">
+      <span class="no">${i === 0 ? '대표' : i + 1}</span>
+      <button class="del" title="삭제">✕</button>`;
+    div.querySelector('.del').onclick = async () => {
+      if (!confirm(`${i + 1}번 사진을 삭제할까요?`)) return;
+      await fetch(`/api/delete?room=${current}&file=${f}`, { method: 'POST', headers: authHeaders() });
+      toast('사진을 삭제했습니다');
+      loadMedia();
+    };
+    grid.appendChild(div);
+  });
+
+  // 동영상
+  const area = $('video-area');
+  if (data.video) {
+    const mb = (data.videoSize / 1024 / 1024).toFixed(1);
+    area.innerHTML = `
+      <div class="video-box">
+        <video src="/images/rooms/${current}/video.mp4?t=${Date.now()}" controls preload="metadata" playsinline></video>
+        <div class="video-meta">video.mp4<br>${mb} MB</div>
+        <button class="btn-del-video">삭제</button>
+      </div>`;
+    area.querySelector('.btn-del-video').onclick = async () => {
+      if (!confirm('동영상을 삭제할까요?')) return;
+      await fetch(`/api/delete?room=${current}&file=video.mp4`, { method: 'POST', headers: authHeaders() });
+      toast('동영상을 삭제했습니다');
+      loadMedia();
+    };
+  } else {
+    area.innerHTML = '<div class="empty">등록된 동영상이 없습니다.</div>';
+  }
+}
+
+/* ---------- 사진 자동 압축 (가로 최대 1600px, JPEG 80%) ---------- */
+function compressImage(file, maxW = 1600, quality = 0.8) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxW / img.width);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('압축 실패')), 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('이미지를 읽을 수 없습니다 (HEIC 등 미지원 형식일 수 있어요)')); };
+    img.src = url;
+  });
+}
+
+/* ---------- 사진 업로드 ---------- */
+$('photo-input').addEventListener('change', async e => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  if (!files.length) return;
+
+  const prog = $('photo-progress'), bar = $('photo-bar'), msg = $('photo-msg');
+  prog.classList.add('show');
+  let done = 0, failed = 0;
+
+  for (const file of files) {
+    msg.textContent = `${file.name} 압축 중... (${done + 1}/${files.length})`;
+    try {
+      const blob = await compressImage(file);
+      msg.textContent = `${file.name} 업로드 중... (${done + 1}/${files.length})`;
+      const res = await fetch(`/api/upload?room=${current}&type=photo`, { method: 'POST', headers: authHeaders(), body: blob });
+      if (!res.ok) throw new Error((await res.json()).error || '업로드 실패');
+      done++;
+    } catch (err) {
+      failed++;
+      console.error(err);
+      toast(`⚠️ ${file.name}: ${err.message}`);
+    }
+    bar.style.width = `${Math.round(((done + failed) / files.length) * 100)}%`;
+  }
+
+  msg.textContent = '';
+  prog.classList.remove('show');
+  bar.style.width = '0';
+  if (done) toast(`사진 ${done}장 업로드 완료!`);
+  loadMedia();
+});
+
+/* ---------- 동영상 업로드 (진행률 표시) ---------- */
+$('video-input').addEventListener('change', e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  if (file.size > 500 * 1024 * 1024) { toast('⚠️ 동영상은 500MB 이하만 가능합니다'); return; }
+
+  const prog = $('video-progress'), bar = $('video-bar'), msg = $('video-msg');
+  prog.classList.add('show');
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', `/api/upload?room=${current}&type=video`);
+  xhr.setRequestHeader('X-Auth-Token', TOKEN);
+  xhr.upload.onprogress = ev => {
+    if (ev.lengthComputable) {
+      const pct = Math.round((ev.loaded / ev.total) * 100);
+      bar.style.width = pct + '%';
+      msg.textContent = `업로드 중... ${pct}% (${(ev.loaded / 1024 / 1024).toFixed(1)} / ${(ev.total / 1024 / 1024).toFixed(1)} MB)`;
+    }
+  };
+  xhr.onload = () => {
+    prog.classList.remove('show'); bar.style.width = '0'; msg.textContent = '';
+    if (xhr.status === 200) { toast('동영상 업로드 완료!'); loadMedia(); }
+    else toast('⚠️ 업로드 실패: ' + xhr.responseText);
+  };
+  xhr.onerror = () => { prog.classList.remove('show'); toast('⚠️ 업로드 중 오류가 발생했습니다'); };
+  xhr.send(file);
+});
+
+/* ---------- 초기화 ---------- */
+updateChips();
+if (TOKEN) { hideLogin(); loadMedia(); }
+else showLogin();
+</script>
+</body>
+</html>

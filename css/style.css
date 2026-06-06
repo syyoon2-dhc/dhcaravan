@@ -1,0 +1,256 @@
+/* ============ 동해카라반펜션 ============ */
+:root {
+  --blue: #0e6ba8;
+  --blue-deep: #0a4d7a;
+  --sky: #e8f4fb;
+  --sand: #f8f5ef;
+  --ink: #1d2b36;
+  --gray: #5f7382;
+  --line: #e3ebf1;
+  --radius: 14px;
+  --shadow: 0 8px 30px rgba(13, 60, 97, .12);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 70px; }
+body {
+  font-family: 'Pretendard', -apple-system, 'Malgun Gothic', sans-serif;
+  color: var(--ink);
+  line-height: 1.65;
+  word-break: keep-all;
+}
+img { max-width: 100%; display: block; }
+a { color: inherit; text-decoration: none; }
+
+.container { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+.center { text-align: center; margin-top: 36px; }
+
+/* ---------- 버튼 ---------- */
+.btn {
+  display: inline-block; padding: 14px 30px; border-radius: 50px;
+  font-size: 16px; font-weight: 700; transition: .25s; cursor: pointer; border: 0;
+}
+.btn-primary { background: var(--blue); color: #fff; box-shadow: var(--shadow); }
+.btn-primary:hover { background: var(--blue-deep); transform: translateY(-2px); }
+.btn-ghost { background: rgba(255,255,255,.15); color: #fff; border: 1.5px solid rgba(255,255,255,.7); backdrop-filter: blur(4px); }
+.btn-ghost:hover { background: rgba(255,255,255,.3); }
+.btn-ghost-dark { background: #fff; color: var(--blue); border: 1.5px solid var(--blue); }
+.btn-ghost-dark:hover { background: var(--sky); }
+.btn-small { padding: 8px 18px; font-size: 14px; background: var(--blue); color: #fff; border-radius: 8px; margin-right: 6px; margin-top: 4px; display: inline-block; }
+.btn-small:hover { background: var(--blue-deep); }
+
+/* ---------- 네비게이션 ---------- */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  transition: .3s; padding: 18px 0;
+}
+.nav.scrolled { background: rgba(255,255,255,.95); box-shadow: 0 2px 16px rgba(0,0,0,.08); padding: 10px 0; backdrop-filter: blur(8px); }
+.nav-inner { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; }
+.logo { font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -.5px; }
+.logo span { font-weight: 500; }
+.nav.scrolled .logo { color: var(--blue-deep); }
+.menu { display: flex; align-items: center; gap: 26px; }
+.menu a { color: #fff; font-weight: 600; font-size: 15.5px; transition: .2s; }
+.nav.scrolled .menu a { color: var(--ink); }
+.menu a:hover { opacity: .7; }
+.menu .btn-reserve {
+  background: var(--blue); color: #fff !important; padding: 9px 22px; border-radius: 50px;
+}
+.menu .btn-reserve:hover { background: var(--blue-deep); opacity: 1; }
+.hamburger { display: none; background: none; border: 0; cursor: pointer; padding: 6px; }
+.hamburger span { display: block; width: 24px; height: 2.5px; background: #fff; margin: 5px 0; border-radius: 2px; transition: .25s; }
+.nav.scrolled .hamburger span { background: var(--ink); }
+
+/* ---------- 히어로 ---------- */
+.hero { position: relative; height: 100svh; min-height: 560px; display: flex; align-items: center; justify-content: center; text-align: center; overflow: hidden; }
+.hero-bg {
+  position: absolute; inset: 0; background-size: cover; background-position: center;
+  animation: heroZoom 18s ease-out forwards;
+}
+@keyframes heroZoom { from { transform: scale(1.08); } to { transform: scale(1); } }
+.hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,40,70,.35), rgba(10,40,70,.15) 50%, rgba(10,40,70,.45)); }
+.hero-content { position: relative; z-index: 2; color: #fff; padding: 0 20px; }
+.hero-sub { letter-spacing: 5px; font-size: 14px; font-weight: 600; opacity: .9; margin-bottom: 14px; }
+.hero h1 { font-size: clamp(40px, 7vw, 68px); font-weight: 800; letter-spacing: -1px; text-shadow: 0 4px 24px rgba(0,0,0,.35); }
+.hero-desc { margin: 18px 0 32px; font-size: clamp(16px, 2.4vw, 19px); opacity: .95; }
+.hero-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+.scroll-down {
+  position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); z-index: 2;
+  color: #fff; font-size: 30px; animation: bounce 2s infinite;
+}
+@keyframes bounce { 0%,100% { transform: translate(-50%,0); } 50% { transform: translate(-50%,10px); } }
+
+/* ---------- 섹션 공통 ---------- */
+.section { padding: 90px 0; }
+.section-alt { background: var(--sky); }
+.section-eyebrow { text-align: center; color: var(--blue); font-weight: 700; letter-spacing: 4px; font-size: 13px; }
+.section-title { text-align: center; font-size: clamp(28px, 4vw, 38px); font-weight: 800; margin: 8px 0 22px; letter-spacing: -.5px; }
+.section-lead { text-align: center; color: var(--gray); font-size: 17px; margin-bottom: 50px; }
+
+/* ---------- 소개 ---------- */
+.features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; }
+.feature {
+  background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 34px 22px; text-align: center; transition: .25s;
+}
+.feature:hover { transform: translateY(-6px); box-shadow: var(--shadow); }
+.feature-icon { font-size: 38px; margin-bottom: 12px; }
+.feature h3 { font-size: 18px; margin-bottom: 8px; }
+.feature p { color: var(--gray); font-size: 14.5px; }
+
+/* ---------- 객실 ---------- */
+.room-group-title { font-size: 23px; font-weight: 800; margin: 46px 0 18px; }
+.room-group-title:first-of-type { margin-top: 10px; }
+.room-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.room-grid-single { grid-template-columns: repeat(3, 1fr); }
+.room-card {
+  background: #fff; border-radius: var(--radius); overflow: hidden;
+  box-shadow: 0 3px 16px rgba(13,60,97,.08); cursor: pointer; transition: .25s;
+  border: 1px solid var(--line);
+}
+.room-card:hover { transform: translateY(-6px); box-shadow: var(--shadow); }
+.room-thumb { position: relative; aspect-ratio: 4/3; overflow: hidden; }
+.room-thumb img { width: 100%; height: 100%; object-fit: cover; transition: .4s; }
+.room-card:hover .room-thumb img { transform: scale(1.06); }
+.room-badge {
+  position: absolute; top: 12px; left: 12px; background: rgba(14,107,168,.92);
+  color: #fff; font-size: 12.5px; font-weight: 700; padding: 5px 12px; border-radius: 50px;
+}
+.room-body { padding: 20px 22px 22px; }
+.room-body h4 { font-size: 19px; font-weight: 800; }
+.room-meta { color: var(--gray); font-size: 14px; margin: 6px 0 10px; }
+.room-price { font-size: 15px; }
+.room-price strong { color: var(--blue); font-size: 19px; }
+.room-more { margin-top: 12px; font-size: 14px; font-weight: 700; color: var(--blue); }
+
+/* ---------- 갤러리 ---------- */
+.gallery-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.gallery-item { aspect-ratio: 4/3; overflow: hidden; border-radius: 10px; cursor: pointer; }
+.gallery-item img { width: 100%; height: 100%; object-fit: cover; transition: .35s; }
+.gallery-item:hover img { transform: scale(1.07); }
+.gallery-item:nth-child(1) { grid-column: span 2; grid-row: span 2; aspect-ratio: auto; }
+
+/* ---------- 요금표 ---------- */
+.table-wrap { overflow-x: auto; border-radius: var(--radius); box-shadow: var(--shadow); background: #fff; }
+.price-table { width: 100%; border-collapse: collapse; font-size: 15px; min-width: 760px; }
+.price-table th, .price-table td { padding: 13px 10px; text-align: center; border: 1px solid var(--line); }
+.price-table thead th { background: var(--blue); color: #fff; border-color: rgba(255,255,255,.25); font-weight: 700; }
+.price-table tbody td:first-child { font-weight: 700; background: var(--sky); }
+.price-table tbody tr:hover td { background: #f4fafd; }
+.price-table tbody tr:hover td:first-child { background: var(--sky); }
+.option-title { font-size: 21px; font-weight: 800; margin: 44px 0 16px; }
+.option-table { min-width: 0; }
+.option-table td strong { color: var(--blue); }
+.option-table .option-note { text-align: left; background: #f7fbfd; color: var(--gray); font-size: 14px; font-weight: 600; }
+.price-notes { margin: 22px 4px 0; color: var(--gray); font-size: 14.5px; list-style: none; }
+.price-notes li::before { content: '·  '; color: var(--blue); font-weight: 800; }
+
+/* ---------- 이용안내 ---------- */
+.info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+.info-card { background: var(--sand); border-radius: var(--radius); padding: 28px 26px; }
+.info-card h3 { font-size: 17.5px; margin-bottom: 10px; }
+.info-card p { color: var(--gray); font-size: 15px; }
+.info-card a { color: var(--blue); font-weight: 700; }
+.info-sub { display: inline-block; margin-top: 6px; font-size: 13.5px; color: #7b8d9a; }
+
+/* ---------- 오시는길 ---------- */
+.map-wrap { border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+.map-wrap iframe { width: 100%; height: 430px; border: 0; display: block; }
+.addr-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 28px; }
+.addr { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
+.addr h3 { font-size: 17px; margin-bottom: 8px; }
+.addr p { color: var(--gray); font-size: 15px; margin-bottom: 10px; }
+.addr a[href^="tel"] { color: var(--blue); font-weight: 800; font-size: 18px; }
+
+/* ---------- 푸터 ---------- */
+.footer { background: #122a3a; color: #9db4c4; text-align: center; padding: 46px 0; font-size: 14.5px; }
+.footer-logo { color: #fff; font-size: 20px; font-weight: 800; margin-bottom: 10px; }
+.footer-copy { margin-top: 14px; font-size: 13px; opacity: .65; }
+.footer-admin { text-decoration: underline; }
+
+/* ---------- 플로팅 버튼 ---------- */
+.floating { position: fixed; right: 18px; bottom: 20px; z-index: 90; display: flex; flex-direction: column; gap: 10px; }
+.float-btn {
+  width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 800; box-shadow: 0 6px 20px rgba(0,0,0,.25); transition: .2s;
+}
+.float-btn:hover { transform: scale(1.08); }
+.float-call { background: #fff; font-size: 24px; }
+.float-book { background: var(--blue); color: #fff; }
+
+/* ---------- 객실 모달 ---------- */
+.modal { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.modal[hidden] { display: none; }
+.modal-backdrop { position: absolute; inset: 0; background: rgba(8,25,40,.72); }
+.modal-box {
+  position: relative; background: #fff; border-radius: 18px; max-width: 760px; width: 100%;
+  max-height: 92vh; overflow-y: auto; box-shadow: 0 24px 80px rgba(0,0,0,.4);
+}
+.modal-close {
+  position: absolute; top: 12px; right: 12px; z-index: 5; width: 38px; height: 38px; border-radius: 50%;
+  border: 0; background: rgba(0,0,0,.45); color: #fff; font-size: 17px; cursor: pointer;
+}
+.modal-slider { position: relative; aspect-ratio: 16/10; background: #0e2233; overflow: hidden; }
+.slider-track { display: flex; height: 100%; transition: transform .35s ease; }
+.slider-track img { width: 100%; height: 100%; object-fit: cover; flex-shrink: 0; }
+.slider-video { width: 100%; height: 100%; flex-shrink: 0; background: #000; display: flex; align-items: center; justify-content: center; }
+.slider-video video { width: 100%; height: 100%; object-fit: contain; }
+.slider-empty {
+  width: 100%; height: 100%; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px;
+  align-items: center; justify-content: center; color: #8fb3cc; font-size: 15px;
+}
+.slider-empty span { font-size: 40px; }
+.slider-btn {
+  position: absolute; top: 50%; transform: translateY(-50%); width: 42px; height: 42px; border-radius: 50%;
+  border: 0; background: rgba(255,255,255,.85); font-size: 24px; cursor: pointer; z-index: 4;
+  display: flex; align-items: center; justify-content: center; line-height: 1; color: var(--ink);
+}
+.slider-btn:hover { background: #fff; }
+.slider-btn.prev { left: 12px; }
+.slider-btn.next { right: 12px; }
+.slider-dots { position: absolute; bottom: 12px; left: 0; right: 0; display: flex; gap: 7px; justify-content: center; z-index: 4; }
+.slider-dots button { width: 9px; height: 9px; border-radius: 50%; border: 0; background: rgba(255,255,255,.5); cursor: pointer; padding: 0; }
+.slider-dots button.on { background: #fff; }
+.modal-body { padding: 26px 30px 30px; }
+.modal-body h3 { font-size: 24px; font-weight: 800; }
+.modal-tags { color: var(--gray); margin: 6px 0 16px; font-size: 15px; }
+.modal-price table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+.modal-price th, .modal-price td { border: 1px solid var(--line); padding: 9px 8px; text-align: center; }
+.modal-price th { background: var(--sky); font-weight: 700; }
+.modal-price .note { margin-top: 8px; font-size: 13.5px; color: var(--gray); }
+.modal-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+
+/* ---------- 라이트박스 ---------- */
+.lightbox { position: fixed; inset: 0; z-index: 300; background: rgba(5,15,25,.93); display: flex; align-items: center; justify-content: center; }
+.lightbox[hidden] { display: none; }
+.lightbox img { max-width: 92vw; max-height: 88vh; border-radius: 6px; box-shadow: 0 10px 60px rgba(0,0,0,.5); }
+.lightbox-close { position: absolute; top: 18px; right: 22px; background: none; border: 0; color: #fff; font-size: 28px; cursor: pointer; }
+.lightbox .slider-btn { background: rgba(255,255,255,.18); color: #fff; }
+.lightbox .slider-btn:hover { background: rgba(255,255,255,.35); }
+
+/* ---------- 반응형 ---------- */
+@media (max-width: 920px) {
+  .features { grid-template-columns: repeat(2, 1fr); }
+  .room-grid, .room-grid-single { grid-template-columns: repeat(2, 1fr); }
+  .gallery-grid { grid-template-columns: repeat(3, 1fr); }
+  .info-grid, .addr-row { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .section { padding: 64px 0; }
+  .menu {
+    position: fixed; top: 0; right: -280px; width: 260px; height: 100vh;
+    background: #fff; flex-direction: column; align-items: flex-start;
+    padding: 80px 28px; gap: 20px; transition: right .3s; box-shadow: -8px 0 30px rgba(0,0,0,.15);
+  }
+  .menu.open { right: 0; }
+  .menu a { color: var(--ink) !important; font-size: 17px; }
+  .hamburger { display: block; position: relative; z-index: 110; }
+  .menu.open ~ .hamburger span, body .nav .hamburger.active span { background: var(--ink); }
+  .hamburger.active span:nth-child(1) { transform: translateY(7.5px) rotate(45deg); }
+  .hamburger.active span:nth-child(2) { opacity: 0; }
+  .hamburger.active span:nth-child(3) { transform: translateY(-7.5px) rotate(-45deg); }
+  .features, .room-grid, .room-grid-single, .info-grid, .addr-row { grid-template-columns: 1fr; }
+  .gallery-grid { grid-template-columns: repeat(2, 1fr); }
+  .map-wrap iframe { height: 320px; }
+  .hero-actions .btn { padding: 12px 22px; font-size: 15px; }
+}

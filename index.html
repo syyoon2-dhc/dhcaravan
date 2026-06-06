@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>동해카라반펜션 — 울산 바닷가 오션뷰 카라반 &amp; 펜션</title>
+<meta name="description" content="울산 울주군 강양항 앞바다가 한눈에 보이는 오션뷰 카라반 &amp; 펜션. 아도라·하비·퍼슈트 카라반과 구름·바다·무지개 펜션, 데크존까지. 예약 010-4589-1415">
+<meta property="og:title" content="동해카라반펜션">
+<meta property="og:description" content="울산 바닷가 오션뷰 카라반 &amp; 펜션">
+<meta property="og:image" content="images/gallery/hero.jpg">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ===== 상단 네비게이션 ===== -->
+<header class="nav" id="nav">
+  <div class="nav-inner">
+    <a href="#home" class="logo">동해<span>카라반펜션</span></a>
+    <nav class="menu" id="menu">
+      <a href="#about">소개</a>
+      <a href="#rooms">객실안내</a>
+      <a href="#gallery">갤러리</a>
+      <a href="#price">요금안내</a>
+      <a href="#info">이용안내</a>
+      <a href="#location">오시는길</a>
+      <a href="https://m.thankqcamping.com/resv/view.hbb?cseq=1767&amp;go_main=Y&amp;path=RP" target="_blank" rel="noopener" class="btn-reserve">실시간예약</a>
+    </nav>
+    <button class="hamburger" id="hamburger" aria-label="메뉴 열기"><span></span><span></span><span></span></button>
+  </div>
+</header>
+
+<!-- ===== 메인 히어로 ===== -->
+<section class="hero" id="home">
+  <div class="hero-bg" style="background-image:url('images/gallery/hero.jpg')"></div>
+  <div class="hero-content">
+    <p class="hero-sub">OCEAN VIEW CARAVAN &amp; PENSION</p>
+    <h1>동해카라반펜션</h1>
+    <p class="hero-desc">강양항 푸른 바다가 눈앞에 펼쳐지는 곳<br>카라반과 펜션에서 즐기는 특별한 하룻밤</p>
+    <div class="hero-actions">
+      <a href="https://m.thankqcamping.com/resv/view.hbb?cseq=1767&amp;go_main=Y&amp;path=RP" target="_blank" rel="noopener" class="btn btn-primary">실시간 예약하기</a>
+      <a href="tel:010-4589-1415" class="btn btn-ghost">📞 010-4589-1415</a>
+    </div>
+  </div>
+  <a href="#about" class="scroll-down" aria-label="아래로 스크롤">⌄</a>
+</section>
+
+<!-- ===== 소개 ===== -->
+<section class="section" id="about">
+  <div class="container">
+    <p class="section-eyebrow">ABOUT</p>
+    <h2 class="section-title">바다 앞, 우리만의 캠핑</h2>
+    <p class="section-lead">
+      동해카라반펜션은 울산 울주군 강양항 바로 앞, 바다가 한눈에 내려다보이는 언덕에 자리하고 있습니다.<br>
+      유럽형 카라반 3대와 펜션 객실 3실, 그리고 바비큐를 즐길 수 있는 데크존까지 —<br>
+      파도 소리를 들으며 잊지 못할 추억을 만들어 보세요.
+    </p>
+    <div class="features">
+      <div class="feature"><div class="feature-icon">🌊</div><h3>오션뷰</h3><p>모든 공간에서 바다가 보이는 탁 트인 전망</p></div>
+      <div class="feature"><div class="feature-icon">🚐</div><h3>유럽형 카라반</h3><p>아도라 · 하비 · 퍼슈트, 감성 캠핑의 정석</p></div>
+      <div class="feature"><div class="feature-icon">🏠</div><h3>펜션 객실</h3><p>가족 · 단체 모임에 좋은 넓은 객실</p></div>
+      <div class="feature"><div class="feature-icon">🔥</div><h3>바비큐 데크</h3><p>바다를 보며 즐기는 데크존 바비큐</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 객실 안내 ===== -->
+<section class="section section-alt" id="rooms">
+  <div class="container">
+    <p class="section-eyebrow">ROOMS</p>
+    <h2 class="section-title">객실 안내</h2>
+
+    <h3 class="room-group-title">🚐 카라반</h3>
+    <div class="room-grid" id="caravan-grid"></div>
+
+    <h3 class="room-group-title">🏠 펜션</h3>
+    <div class="room-grid" id="pension-grid"></div>
+
+    <h3 class="room-group-title">🔥 데크존</h3>
+    <div class="room-grid room-grid-single" id="deck-grid"></div>
+  </div>
+</section>
+
+<!-- ===== 갤러리 ===== -->
+<section class="section" id="gallery">
+  <div class="container">
+    <p class="section-eyebrow">GALLERY</p>
+    <h2 class="section-title">갤러리</h2>
+    <div class="gallery-grid" id="gallery-grid"></div>
+  </div>
+</section>
+
+<!-- ===== 요금 안내 ===== -->
+<section class="section section-alt" id="price">
+  <div class="container">
+    <p class="section-eyebrow">PRICE</p>
+    <h2 class="section-title">요금 안내</h2>
+    <div class="table-wrap">
+      <table class="price-table">
+        <thead>
+          <tr>
+            <th rowspan="2">구분</th><th rowspan="2">객실</th><th colspan="2">인원</th><th colspan="2">정상가</th><th colspan="2">성수기</th><th rowspan="2">비고</th>
+          </tr>
+          <tr>
+            <th>기준</th><th>최대</th><th>평일</th><th>주말</th><th>평일</th><th>주말</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td rowspan="3">카라반</td><td>아도라542UL</td><td>2</td><td>5</td><td>120,000</td><td>170,000</td><td>170,000</td><td>220,000</td><td rowspan="3">인원 추가<br>1인 10,000원</td></tr>
+          <tr><td>하비495WFB</td><td>2</td><td>4</td><td>120,000</td><td>170,000</td><td>170,000</td><td>220,000</td></tr>
+          <tr><td>퍼슈트530-4</td><td>2</td><td>4</td><td>100,000</td><td>150,000</td><td>150,000</td><td>200,000</td></tr>
+          <tr><td rowspan="2">펜션</td><td>바다 · 구름</td><td>4</td><td>6</td><td>100,000</td><td>150,000</td><td>150,000</td><td>200,000</td><td rowspan="2">인원 추가<br>비용 없음</td></tr>
+          <tr><td>무지개</td><td>8</td><td>12</td><td>200,000</td><td>300,000</td><td>300,000</td><td>400,000</td></tr>
+          <tr><td>데크존</td><td>—</td><td>2</td><td>4</td><td>30,000</td><td>40,000</td><td>40,000</td><td>50,000</td><td>인원 추가<br>1인 5,000원</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3 class="option-title">옵션 안내</h3>
+    <div class="table-wrap table-wrap-option">
+      <table class="price-table option-table">
+        <thead>
+          <tr><th>구분</th><th>내용</th><th>요금</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>월광보합</td><td>추억의 오락기 이용</td><td><strong>무료</strong></td></tr>
+          <tr><td rowspan="2">바비큐 장비</td><td>웨버57 (6~8인용)</td><td>30,000원</td></tr>
+          <tr><td>웨버47 (2~4인용)</td><td>20,000원</td></tr>
+          <tr><td colspan="3" class="option-note">✔ 바비큐 장비 공통 지급품목 : 숯(초기 점화 후 지급) · 여유숯 · 일회용 전용석쇠 · 장갑</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="price-notes">
+      <li>주말 : 금 · 토요일 및 공휴일 전날 기준입니다.</li>
+      <li>성수기 기간 및 자세한 요금은 전화로 문의해 주세요.</li>
+      <li>인원 추가는 영 · 유아를 포함한 인원 기준입니다.</li>
+    </ul>
+    <div class="center">
+      <a href="https://m.thankqcamping.com/resv/view.hbb?cseq=1767&amp;go_main=Y&amp;path=RP" target="_blank" rel="noopener" class="btn btn-primary">실시간 예약하기</a>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 이용 안내 ===== -->
+<section class="section" id="info">
+  <div class="container">
+    <p class="section-eyebrow">INFORMATION</p>
+    <h2 class="section-title">이용 안내</h2>
+    <div class="info-grid">
+      <div class="info-card">
+        <h3>⏰ 입실 / 퇴실</h3>
+        <p>입실 15:00 / 퇴실 11:00<br>(데크존 등 자세한 시간은 예약 시 안내)</p>
+      </div>
+      <div class="info-card">
+        <h3>🔥 바비큐 장비 대여</h3>
+        <p>웨버57 (6~8인용) 30,000원<br>웨버47 (2~4인용) 20,000원<br>
+        <span class="info-sub">공통 지급품목 : 숯(초기 점화 후 지급) · 여유숯 · 일회용 전용석쇠 · 장갑</span></p>
+      </div>
+      <div class="info-card">
+        <h3>🕹️ 월광보합</h3>
+        <p>추억의 월광보합 오락기 <strong>무료</strong> 이용!<br>아이부터 어른까지 모두 즐겨 보세요.</p>
+      </div>
+      <div class="info-card">
+        <h3>🏊 수영장</h3>
+        <p>여름 시즌 야외 간이 수영장 운영<br>(운영 기간은 사전 문의)</p>
+      </div>
+      <div class="info-card">
+        <h3>🚗 주차</h3>
+        <p>펜션 내 무료 주차장 완비</p>
+      </div>
+      <div class="info-card">
+        <h3>🚭 금연</h3>
+        <p>카라반 및 객실 내부는 금연입니다.<br>지정된 장소를 이용해 주세요.</p>
+      </div>
+      <div class="info-card">
+        <h3>📞 예약 문의</h3>
+        <p><a href="tel:010-4589-1415">010-4589-1415</a><br>실시간 예약은 상단 예약 버튼을 이용해 주세요.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 오시는 길 ===== -->
+<section class="section section-alt" id="location">
+  <div class="container">
+    <p class="section-eyebrow">LOCATION</p>
+    <h2 class="section-title">오시는 길</h2>
+    <div class="map-wrap">
+      <iframe src="https://maps.google.com/maps?q=%EC%9A%B8%EC%82%B0%EA%B4%91%EC%97%AD%EC%8B%9C%20%EC%9A%B8%EC%A3%BC%EA%B5%B0%20%EC%98%A8%EC%82%B0%EC%9D%8D%20%EA%B0%95%EC%96%91%EA%B8%B8%20162&amp;t=m&amp;z=16&amp;output=embed" loading="lazy" title="동해카라반펜션 지도" allowfullscreen></iframe>
+    </div>
+    <div class="addr-row">
+      <div class="addr">
+        <h3>📍 주소</h3>
+        <p id="addr-text">울산광역시 울주군 온산읍 강양길 162</p>
+        <button class="btn btn-small" id="copy-addr">주소 복사</button>
+      </div>
+      <div class="addr">
+        <h3>📞 연락처</h3>
+        <p><a href="tel:010-4589-1415">010-4589-1415</a></p>
+        <a class="btn btn-small" href="tel:010-4589-1415">전화 걸기</a>
+      </div>
+      <div class="addr">
+        <h3>🗺️ 길찾기</h3>
+        <p>내비게이션에 주소를 입력하세요</p>
+        <a class="btn btn-small" href="https://map.kakao.com/link/search/울산광역시 울주군 온산읍 강양길 162" target="_blank" rel="noopener">카카오맵</a>
+        <a class="btn btn-small" href="https://map.naver.com/p/search/울산광역시 울주군 온산읍 강양길 162" target="_blank" rel="noopener">네이버지도</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 푸터 ===== -->
+<footer class="footer">
+  <div class="container">
+    <p class="footer-logo">동해카라반펜션</p>
+    <p>울산광역시 울주군 온산읍 강양길 162 · 예약문의 010-4589-1415 · 사업자등록번호 120-13-01206</p>
+    <p class="footer-copy">© 동해카라반펜션. All rights reserved. · <a href="admin.html" class="footer-admin">사진 관리</a></p>
+  </div>
+</footer>
+
+<!-- ===== 플로팅 버튼 ===== -->
+<div class="floating">
+  <a href="tel:010-4589-1415" class="float-btn float-call" aria-label="전화 걸기">📞</a>
+  <a href="https://m.thankqcamping.com/resv/view.hbb?cseq=1767&amp;go_main=Y&amp;path=RP" target="_blank" rel="noopener" class="float-btn float-book">예약</a>
+</div>
+
+<!-- ===== 객실 상세 모달 ===== -->
+<div class="modal" id="room-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-box">
+    <button class="modal-close" data-close aria-label="닫기">✕</button>
+    <div class="modal-slider">
+      <div class="slider-track" id="slider-track"></div>
+      <button class="slider-btn prev" id="slider-prev" aria-label="이전 사진">‹</button>
+      <button class="slider-btn next" id="slider-next" aria-label="다음 사진">›</button>
+      <div class="slider-dots" id="slider-dots"></div>
+    </div>
+    <div class="modal-body">
+      <h3 id="modal-title"></h3>
+      <p class="modal-tags" id="modal-tags"></p>
+      <div class="modal-price" id="modal-price"></div>
+      <div class="modal-actions">
+        <a href="https://m.thankqcamping.com/resv/view.hbb?cseq=1767&amp;go_main=Y&amp;path=RP" target="_blank" rel="noopener" class="btn btn-primary">예약하기</a>
+        <a href="tel:010-4589-1415" class="btn btn-ghost-dark">전화 문의</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 갤러리 라이트박스 ===== -->
+<div class="lightbox" id="lightbox" hidden>
+  <button class="lightbox-close" id="lightbox-close" aria-label="닫기">✕</button>
+  <button class="slider-btn prev" id="lb-prev" aria-label="이전">‹</button>
+  <img id="lightbox-img" src="" alt="갤러리 사진">
+  <button class="slider-btn next" id="lb-next" aria-label="다음">›</button>
+</div>
+
+<script src="js/main.js"></script>
+</body>
+</html>
