@@ -234,6 +234,9 @@ a { color: inherit; text-decoration: none; }
   .room-grid, .room-grid-single { grid-template-columns: repeat(2, 1fr); }
   .gallery-grid { grid-template-columns: repeat(3, 1fr); }
   .info-grid, .addr-row { grid-template-columns: repeat(2, 1fr); }
+  /* 요금표: 좁은 화면에서 가로 스크롤 없이 들어가도록 압축 */
+  .price-table { min-width: 0; font-size: 12.5px; }
+  .price-table th, .price-table td { padding: 9px 4px; }
 }
 @media (max-width: 640px) {
   .section { padding: 64px 0; }

@@ -133,10 +133,153 @@ let TOKEN = sessionStorage.getItem('dhc_token') || '';
 
 function authHeaders() { return { 'X-Auth-Token': TOKEN }; }
 
+/* ---------- 원격 모드 (인터넷 사이트에서 접속 시) ----------
+ * GitHub Pages에는 업로드 서버가 없으므로 GitHub API로
+ * 저장소에 직접 사진을 올립니다. 변경 후 1~2분 뒤 사이트에 반영됩니다.
+ * 로그인: 비밀번호 칸에 GitHub 토큰 입력
+ */
+const REPO = 'syyoon2-dhc/dhcaravan';
+const BRANCH = 'master';
+let MODE = 'local'; // 'local' = 펜션 PC 서버 / 'remote' = GitHub API
+let GH_TOKEN = localStorage.getItem('dhc_gh_token') || '';
+let remoteFiles = {};   // 파일명 -> { sha, download_url, size }
+let remotePhotos = [];
+
+function gh(path, opts = {}) {
+  return fetch(`https://api.github.com/repos/${REPO}/${path}`, {
+    ...opts,
+    headers: {
+      'Authorization': `Bearer ${GH_TOKEN}`,
+      'Accept': 'application/vnd.github+json',
+      ...(opts.headers || {}),
+    },
+  });
+}
+
+async function ghCheck() {
+  if (!GH_TOKEN) return false;
+  try { return (await gh('')).ok; } catch { return false; }
+}
+
+async function detectMode() {
+  try {
+    const res = await fetch('/api/media?room=adora', { headers: authHeaders() });
+    return (res.ok || res.status === 401) ? 'local' : 'remote';
+  } catch { return 'remote'; }
+}
+
+const blobToBase64 = blob => new Promise((resolve, reject) => {
+  const r = new FileReader();
+  r.onload = () => resolve(r.result.split(',')[1]);
+  r.onerror = reject;
+  r.readAsDataURL(blob);
+});
+
+function mediaDirPath() { return current === 'gallery' ? 'images/photos' : `images/rooms/${current}`; }
+
+async function putFile(path, base64, message, sha) {
+  const res = await gh(`contents/${path}`, {
+    method: 'PUT',
+    body: JSON.stringify({ message, content: base64, branch: BRANCH, ...(sha ? { sha } : {}) }),
+  });
+  if (!res.ok) throw new Error(`업로드 실패 (${res.status})`);
+  return res.json();
+}
+
+async function deleteRemoteFile(path, sha, message) {
+  const res = await gh(`contents/${path}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ message, sha, branch: BRANCH }),
+  });
+  if (!res.ok) throw new Error(`삭제 실패 (${res.status})`);
+}
+
+async function loadMediaRemote() {
+  const isGallery = current === 'gallery';
+  $('photo-title').textContent = isGallery ? '갤러리 사진' : '객실 사진';
+  $('video-card').style.display = isGallery ? 'none' : '';
+
+  const res = await gh(`contents/${mediaDirPath()}?ref=${BRANCH}&t=${Date.now()}`);
+  if (res.status === 401) { showLogin(); return; }
+  const items = res.ok ? await res.json() : [];
+  remoteFiles = {};
+  (Array.isArray(items) ? items : []).forEach(it => { remoteFiles[it.name] = it; });
+  remotePhotos = Object.keys(remoteFiles).filter(n => /^\d+\.jpg$/.test(n))
+    .sort((a, b) => parseInt(a) - parseInt(b));
+
+  const grid = $('photo-grid');
+  grid.innerHTML = '';
+  $('photo-empty').hidden = remotePhotos.length > 0;
+  $('photo-count').textContent = remotePhotos.length ? `${remotePhotos.length}장` : '';
+  remotePhotos.forEach((f, i) => {
+    const div = document.createElement('div');
+    div.className = 'ph';
+    div.innerHTML = `
+      <img src="${remoteFiles[f].download_url}" alt="${i + 1}번 사진" loading="lazy">
+      <span class="no">${i === 0 ? '대표' : i + 1}</span>
+      <button class="del" title="삭제">✕</button>`;
+    div.querySelector('.del').onclick = () => remoteDeletePhoto(f, i);
+    grid.appendChild(div);
+  });
+
+  const area = $('video-area');
+  const v = remoteFiles['video.mp4'];
+  if (v) {
+    area.innerHTML = `
+      <div class="video-box">
+        <video src="${v.download_url}" controls preload="metadata" playsinline></video>
+        <div class="video-meta">video.mp4<br>${(v.size / 1024 / 1024).toFixed(1)} MB</div>
+        <button class="btn-del-video">삭제</button>
+      </div>`;
+    area.querySelector('.btn-del-video').onclick = async () => {
+      if (!confirm('동영상을 삭제할까요?')) return;
+      try {
+        await deleteRemoteFile(`${mediaDirPath()}/video.mp4`, v.sha, '동영상 삭제');
+        toast('삭제 완료 — 1~2분 후 사이트 반영');
+      } catch (err) { toast('⚠️ ' + err.message); }
+      loadMedia();
+    };
+  } else {
+    area.innerHTML = '<div class="empty">등록된 동영상이 없습니다.</div>';
+  }
+}
+
+async function remoteDeletePhoto(name, idx) {
+  if (!confirm(`${idx + 1}번 사진을 삭제할까요?`)) return;
+  const dir = mediaDirPath();
+  const prog = $('photo-progress'), msg = $('photo-msg');
+  prog.classList.add('show');
+  try {
+    msg.textContent = '삭제 중...';
+    await deleteRemoteFile(`${dir}/${name}`, remoteFiles[name].sha, `사진 삭제: ${name}`);
+    // 뒷번호 사진을 한 칸씩 앞으로 당겨 번호 빈틈 방지
+    const delNum = parseInt(name);
+    const after = remotePhotos.map(p => parseInt(p)).filter(n => n > delNum).sort((a, b) => a - b);
+    for (const n of after) {
+      msg.textContent = `번호 정리 중... (${n}번 → ${n - 1}번)`;
+      const raw = await gh(`contents/${dir}/${n}.jpg?ref=${BRANCH}`, { headers: { 'Accept': 'application/vnd.github.raw' } });
+      const b64 = await blobToBase64(await raw.blob());
+      await putFile(`${dir}/${n - 1}.jpg`, b64, `사진 번호 정리: ${n} → ${n - 1}`);
+      await deleteRemoteFile(`${dir}/${n}.jpg`, remoteFiles[`${n}.jpg`].sha, `사진 번호 정리: ${n} 삭제`);
+    }
+    toast('사진을 삭제했습니다 — 1~2분 후 사이트 반영');
+  } catch (err) { toast('⚠️ ' + err.message); }
+  prog.classList.remove('show'); msg.textContent = '';
+  loadMedia();
+}
+
 function showLogin() {
   $('login-overlay').hidden = false;
   $('logout-btn').hidden = true;
-  setTimeout(() => $('login-id').focus(), 50);
+  if (MODE === 'remote') {
+    document.querySelector('.login-box .sub').textContent = '인터넷 관리 모드 — 비밀번호 칸에 GitHub 토큰을 입력하세요';
+    $('login-id').style.display = 'none';
+    $('login-id').required = false;
+    $('login-pw').placeholder = 'GitHub 토큰 (ghp_ 또는 gho_ 로 시작)';
+    setTimeout(() => $('login-pw').focus(), 50);
+  } else {
+    setTimeout(() => $('login-id').focus(), 50);
+  }
 }
 function hideLogin() {
   $('login-overlay').hidden = true;
@@ -146,6 +289,18 @@ function hideLogin() {
 $('login-form').addEventListener('submit', async e => {
   e.preventDefault();
   $('login-err').textContent = '';
+  if (MODE === 'remote') {
+    GH_TOKEN = $('login-pw').value.trim();
+    if (await ghCheck()) {
+      localStorage.setItem('dhc_gh_token', GH_TOKEN);
+      $('login-pw').value = '';
+      hideLogin();
+      loadMedia();
+    } else {
+      $('login-err').textContent = '토큰이 올바르지 않습니다';
+    }
+    return;
+  }
   try {
     const res = await fetch('/api/login', {
       method: 'POST',
@@ -167,6 +322,8 @@ $('login-form').addEventListener('submit', async e => {
 $('logout-btn').addEventListener('click', () => {
   TOKEN = '';
   sessionStorage.removeItem('dhc_token');
+  GH_TOKEN = '';
+  localStorage.removeItem('dhc_gh_token');
   showLogin();
 });
 
@@ -196,6 +353,7 @@ function toast(msg) {
 const mediaDir = () => current === 'gallery' ? '/images/photos' : `/images/rooms/${current}`;
 
 async function loadMedia() {
+  if (MODE === 'remote') return loadMediaRemote();
   const isGallery = current === 'gallery';
   $('photo-title').textContent = isGallery ? '갤러리 사진' : '객실 사진';
   $('video-card').style.display = isGallery ? 'none' : '';
@@ -207,11 +365,7 @@ async function loadMedia() {
     if (!res.ok) throw new Error();
     data = await res.json();
   } catch {
-    // 인터넷에 배포된 사이트에서는 업로드 서버가 없으므로 안내만 표시
-    document.querySelector('.wrap').innerHTML =
-      '<div class="card"><h2>⚠️ 사용할 수 없습니다</h2><p style="color:var(--gray);font-size:14.5px;margin-top:8px;">' +
-      '사진 관리는 펜션 PC에서 서버(server.py)를 켠 상태에서만 사용할 수 있습니다.<br>' +
-      'PC에서 사진을 변경한 뒤 배포를 갱신하면 이 사이트에 반영됩니다.</p></div>';
+    toast('⚠️ 서버 연결이 끊어졌습니다. server.py 실행 확인 후 새로고침해 주세요.');
     return;
   }
 
@@ -286,14 +440,21 @@ $('photo-input').addEventListener('change', async e => {
   const prog = $('photo-progress'), bar = $('photo-bar'), msg = $('photo-msg');
   prog.classList.add('show');
   let done = 0, failed = 0;
+  // 원격 모드: 다음 사진 번호 계산
+  let nextNo = (remotePhotos.length ? Math.max(...remotePhotos.map(p => parseInt(p))) : 0) + 1;
 
   for (const file of files) {
     msg.textContent = `${file.name} 압축 중... (${done + 1}/${files.length})`;
     try {
       const blob = await compressImage(file);
       msg.textContent = `${file.name} 업로드 중... (${done + 1}/${files.length})`;
-      const res = await fetch(`/api/upload?room=${current}&type=photo`, { method: 'POST', headers: authHeaders(), body: blob });
-      if (!res.ok) throw new Error((await res.json()).error || '업로드 실패');
+      if (MODE === 'remote') {
+        await putFile(`${mediaDirPath()}/${nextNo}.jpg`, await blobToBase64(blob), `사진 추가: ${nextNo}.jpg`);
+        nextNo++;
+      } else {
+        const res = await fetch(`/api/upload?room=${current}&type=photo`, { method: 'POST', headers: authHeaders(), body: blob });
+        if (!res.ok) throw new Error((await res.json()).error || '업로드 실패');
+      }
       done++;
     } catch (err) {
       failed++;
@@ -306,7 +467,7 @@ $('photo-input').addEventListener('change', async e => {
   msg.textContent = '';
   prog.classList.remove('show');
   bar.style.width = '0';
-  if (done) toast(`사진 ${done}장 업로드 완료!`);
+  if (done) toast(`사진 ${done}장 업로드 완료!` + (MODE === 'remote' ? ' 1~2분 후 사이트 반영' : ''));
   loadMedia();
 });
 
@@ -318,6 +479,28 @@ $('video-input').addEventListener('change', e => {
   if (file.size > 500 * 1024 * 1024) { toast('⚠️ 동영상은 500MB 이하만 가능합니다'); return; }
 
   const prog = $('video-progress'), bar = $('video-bar'), msg = $('video-msg');
+
+  // 원격 모드: GitHub API로 직접 업로드 (압축 없음 — 80MB 제한)
+  if (MODE === 'remote') {
+    if (file.size > 80 * 1024 * 1024) {
+      toast('⚠️ 인터넷 업로드는 80MB 이하만 가능합니다. 큰 영상은 펜션 PC에서 올려주세요 (자동압축됨)');
+      return;
+    }
+    (async () => {
+      prog.classList.add('show');
+      try {
+        msg.textContent = '동영상 변환 중...';
+        const b64 = await blobToBase64(file);
+        msg.textContent = `업로드 중... (${(file.size / 1024 / 1024).toFixed(1)}MB — 수십 초 걸릴 수 있습니다)`;
+        await putFile(`${mediaDirPath()}/video.mp4`, b64, '동영상 업로드', remoteFiles['video.mp4']?.sha);
+        toast('동영상 업로드 완료! 1~2분 후 사이트 반영');
+        loadMedia();
+      } catch (err) { toast('⚠️ ' + err.message); }
+      prog.classList.remove('show'); msg.textContent = '';
+    })();
+    return;
+  }
+
   prog.classList.add('show');
 
   const xhr = new XMLHttpRequest();
@@ -351,8 +534,14 @@ $('video-input').addEventListener('change', e => {
 
 /* ---------- 초기화 ---------- */
 updateChips();
-if (TOKEN) { hideLogin(); loadMedia(); }
-else showLogin();
+(async () => {
+  MODE = await detectMode();
+  if (MODE === 'local') {
+    if (TOKEN) { hideLogin(); loadMedia(); } else showLogin();
+  } else {
+    if (await ghCheck()) { hideLogin(); loadMedia(); } else showLogin();
+  }
+})();
 </script>
 </body>
 </html>
