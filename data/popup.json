@@ -1,8 +1,8 @@
 {
-  "enabled": false,
-  "title": "이벤트 안내",
-  "body": "동해카라반펜션 이벤트!\n자세한 내용은 전화로 문의해 주세요.",
-  "image": "",
+  "enabled": true,
+  "title": "호국보훈의달 10%할인행사",
+  "body": "6월 호국보훈의달 기념 10%할인 행사를 진행합니다",
+  "image": "images/popup.jpg",
   "link": "",
   "linkText": "예약하러 가기"
 }
