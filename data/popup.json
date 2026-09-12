@@ -1,8 +1,8 @@
 {
-  "enabled": true,
-  "title": "성수기 수영장 개장",
-  "body": "성수기 수영장 개장합니다",
-  "image": "images/popup.jpg",
+  "enabled": false,
+  "title": "",
+  "body": "",
+  "image": "",
   "link": "",
   "linkText": "예약하러 가기"
 }
