@@ -340,11 +340,50 @@ a { color: inherit; text-decoration: none; }
 }
 .fish h3 { font-size: clamp(23px, 3.2vw, 30px); font-weight: 800; margin: 15px 0 12px; letter-spacing: -.5px; }
 .fish-lead { font-size: 16.5px; color: rgba(255,255,255,.9); margin-bottom: 26px; }
+
+/* 횟집 사진 */
+.fish-shots {
+  display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 150px;
+  gap: 10px; margin-bottom: 10px;
+}
+.fish-shot {
+  position: relative; overflow: hidden; border-radius: 12px; cursor: pointer;
+  border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08);
+}
+.fish-shot-lg { grid-column: span 2; grid-row: span 2; }
+.fish-shot img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+  transition: transform .4s ease;
+}
+.fish-shot:hover img { transform: scale(1.06); }
+.fish-shot figcaption {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 20px 12px 10px;
+  font-size: 13px; font-weight: 600; color: #fff; text-align: left; line-height: 1.35;
+  background: linear-gradient(to top, rgba(0,0,0,.72), rgba(0,0,0,0));
+}
+.fish-shot-lg figcaption { font-size: 15px; padding: 26px 16px 14px; }
+.fish-shots-note { font-size: 12.5px; color: rgba(255,255,255,.62); margin-bottom: 24px; }
+
 .fish-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; text-align: left; }
 .fish-col { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18); border-radius: 12px; padding: 20px 20px 22px; }
 .fish-col h4 { font-size: 16.5px; margin-bottom: 8px; }
 .fish-col p { font-size: 14.5px; color: rgba(255,255,255,.88); }
-.fish-note { margin-top: 24px; font-size: 15px; color: rgba(255,255,255,.92); }
+.fish-cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 24px; }
+.fish-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.4); color: #fff;
+  font-size: 14.5px; font-weight: 700; padding: 11px 20px; border-radius: 50px;
+  transition: background .2s, border-color .2s, transform .2s;
+}
+.fish-btn:hover { background: rgba(255,255,255,.26); border-color: #fff; transform: translateY(-1px); }
+.fish-btn-naver { background: #03c75a; border-color: #03c75a; }
+.fish-btn-naver:hover { background: #02b351; border-color: #02b351; }
+.fish-btn-n {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 5px; background: #fff; color: #03c75a;
+  font-size: 13px; font-weight: 900; line-height: 1;
+}
+.fish-note { margin-top: 18px; font-size: 15px; color: rgba(255,255,255,.92); }
 .fish-note a { font-weight: 800; text-decoration: underline; }
 
 .footer-sub { font-size: 14.5px; opacity: .85; margin-top: -4px; margin-bottom: 8px; }
@@ -361,6 +400,7 @@ a { color: inherit; text-decoration: none; }
   .info-grid, .addr-row { grid-template-columns: repeat(2, 1fr); }
   .tour-grid, .cherry-cols { grid-template-columns: repeat(2, 1fr); }
   .fish-cols { grid-template-columns: 1fr; }
+  .fish-shots { grid-auto-rows: 120px; }
   /* 요금표: 좁은 화면에서 가로 스크롤 없이 들어가도록 압축 */
   .price-table { min-width: 0; font-size: 12.5px; }
   .price-table th, .price-table td { padding: 9px 4px; }
@@ -386,6 +426,11 @@ a { color: inherit; text-decoration: none; }
   .golf-inner { padding: 28px 22px; }
   .fish-cols { grid-template-columns: 1fr; }
   .fish-inner { padding: 30px 22px; }
+  .fish-shots { grid-template-columns: repeat(2, 1fr); grid-auto-rows: 110px; gap: 8px; }
+  .fish-shot-lg { grid-column: span 2; grid-row: span 2; }
+  .fish-shot figcaption { font-size: 11.5px; padding: 16px 9px 8px; }
+  .fish-shot-lg figcaption { font-size: 13.5px; padding: 22px 12px 10px; }
+  .fish-btn { font-size: 13.5px; padding: 10px 16px; }
   .gallery-grid { grid-template-columns: repeat(2, 1fr); }
   .map-wrap iframe { height: 320px; }
   .hero-actions .btn { padding: 12px 22px; font-size: 15px; }

@@ -236,17 +236,30 @@ function renderGallery() {
 const lightbox = document.getElementById('lightbox');
 const lbImg = document.getElementById('lightbox-img');
 let lbIdx = 0;
+let lbList = GALLERY;
 
-function openLightbox(i) {
+function openLightbox(i, list) {
+  lbList = list && list.length ? list : GALLERY;
   lbIdx = i;
-  lbImg.src = GALLERY[lbIdx];
+  lbImg.src = lbList[lbIdx];
   lightbox.hidden = false;
   document.body.style.overflow = 'hidden';
 }
 function moveLightbox(d) {
-  lbIdx = (lbIdx + d + GALLERY.length) % GALLERY.length;
-  lbImg.src = GALLERY[lbIdx];
+  lbIdx = (lbIdx + d + lbList.length) % lbList.length;
+  lbImg.src = lbList[lbIdx];
 }
+
+/* 동해횟집 사진도 같은 라이트박스로 */
+function initFishShots() {
+  const shots = Array.from(document.querySelectorAll('.fish-shot img'));
+  if (!shots.length) return;
+  const srcs = shots.map(img => img.getAttribute('src'));
+  shots.forEach((img, i) => {
+    img.parentElement.addEventListener('click', () => openLightbox(i, srcs));
+  });
+}
+initFishShots();
 document.getElementById('lb-prev').addEventListener('click', e => { e.stopPropagation(); moveLightbox(-1); });
 document.getElementById('lb-next').addEventListener('click', e => { e.stopPropagation(); moveLightbox(1); });
 document.getElementById('lightbox-close').addEventListener('click', () => {
