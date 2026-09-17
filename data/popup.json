@@ -1,8 +1,8 @@
 {
-  "enabled": false,
-  "title": "",
-  "body": "",
-  "image": "",
+  "enabled": true,
+  "title": "10월 황금연휴 할인 이벤트",
+  "body": "10월 연후 주말비용 평일요금 적용 이벤트",
+  "image": "images/popup.jpg",
   "link": "",
   "linkText": "예약하러 가기"
 }
