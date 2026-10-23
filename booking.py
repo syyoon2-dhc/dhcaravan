@@ -249,12 +249,19 @@ def save_settings(data):
             raise BookingError('임시요금 종료일이 시작일보다 빠릅니다')
         days = sp.get('days') if sp.get('days') in ('weekend', 'weekday') else 'all'
         rooms = sp.get('rooms') if isinstance(sp.get('rooms'), list) else ([sp['room']] if sp.get('room') else [])
+        # 요금 방식: fixed=금액 직접 입력 / weekday=각 객실의 평일 요금 / minus=기본 요금에서 X원 할인 / percent=X% 할인
+        mode = sp.get('mode') if sp.get('mode') in ('weekday', 'minus', 'percent') else 'fixed'
         item = {'rooms': sorted({str(r) for r in rooms if r}), 'start': st.isoformat(), 'end': en.isoformat(), 'days': days,
-                'weekday': int(sp.get('weekday') or 0) if days != 'weekend' else 0,
-                'weekend': int(sp.get('weekend') or 0) if days != 'weekday' else 0,
+                'mode': mode, 'amount': int(sp.get('amount') or 0) if mode in ('minus', 'percent') else 0,
+                'weekday': int(sp.get('weekday') or 0) if mode == 'fixed' and days != 'weekend' else 0,
+                'weekend': int(sp.get('weekend') or 0) if mode == 'fixed' and days != 'weekday' else 0,
                 'note': str(sp.get('note', ''))[:50]}
-        if (days != 'weekend' and item['weekday'] <= 0) or (days != 'weekday' and item['weekend'] <= 0):
+        if mode == 'fixed' and ((days != 'weekend' and item['weekday'] <= 0) or (days != 'weekday' and item['weekend'] <= 0)):
             raise BookingError('임시요금의 요금을 입력하세요')
+        if mode in ('minus', 'percent') and item['amount'] <= 0:
+            raise BookingError('할인 금액(또는 %)을 입력하세요')
+        if mode == 'percent' and item['amount'] >= 100:
+            raise BookingError('할인율은 100% 미만으로 입력하세요')
         specials.append(item)
     s['specialPrices'] = sorted(specials, key=lambda x: x['start'])
     os.makedirs(PRIVATE_DIR, exist_ok=True)
@@ -328,14 +335,22 @@ def day_info(prices, d):
 def night_price(prices, room, d, specials=()):
     peak, weekend = day_info(prices, d)
     ds = d.isoformat()
+    base = room['price']['peak' if peak else 'normal'][1 if weekend else 0]
     for sp in specials:  # 임시요금 (나중에 등록한 것보다 기간이 겹치면 먼저 등록된 것 우선)
         days = sp.get('days', 'all')  # 주말만 · 평일만이면 나머지 요일은 기본 요금
         if (days == 'weekend' and not weekend) or (days == 'weekday' and weekend):
             continue
         rooms = sp.get('rooms') if 'rooms' in sp else ([sp['room']] if sp.get('room') else [])  # 예전 형식(room 하나)도 지원
         if (not rooms or room['id'] in rooms) and sp['start'] <= ds <= sp['end']:
+            mode = sp.get('mode', 'fixed')
+            if mode == 'weekday':  # 주말에도 그 객실의 평일 요금 (객실마다 다른 요금 그대로)
+                return room['price']['peak' if peak else 'normal'][0], peak, weekend
+            if mode == 'minus':
+                return max(0, base - sp['amount']), peak, weekend
+            if mode == 'percent':
+                return base * (100 - sp['amount']) // 100 // 10 * 10, peak, weekend  # 10원 단위 버림
             return sp['weekend' if weekend else 'weekday'], peak, weekend
-    return room['price']['peak' if peak else 'normal'][1 if weekend else 0], peak, weekend
+    return base, peak, weekend
 
 
 def get_room(prices, room_id):
