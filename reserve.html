@@ -205,12 +205,12 @@
 
   <!-- ===== 예약 조회 ===== -->
   <div class="panel" id="tab-lookup" hidden>
-    <div class="field"><label>예약번호</label><input id="lk-code" placeholder="예: DH261023-1234" style="text-transform:uppercase"></div>
+    <div class="field"><label>예약번호 또는 예약자 이름</label><input id="lk-code" placeholder="예: DH261023-1234 또는 홍길동"></div>
     <div class="field"><label>휴대폰 번호</label><input id="lk-phone" type="tel" inputmode="numeric" placeholder="예약할 때 입력한 번호"></div>
     <button class="btn" id="lk-btn" style="width:100%">조회하기</button>
     <p class="err" id="lk-err"></p>
     <div id="lk-result"></div>
-    <p class="hint" style="margin-top:14px">예약 변경 · 취소는 <a href="tel:010-4589-1415"><b>010-4589-1415</b></a>로 연락 주세요.</p>
+    <p class="hint" style="margin-top:14px">예약 변경은 <a href="tel:010-4589-1415"><b>010-4589-1415</b></a>로 연락 주세요.</p>
   </div>
 </div>
 
@@ -498,7 +498,7 @@ function showDone(r, name) {
         입금 기한 <b style="color:var(--red)">${esc(r.deadline)}까지</b>
       </div>
     </div>
-    <p class="hint">· 기한 내 미입금 시 예약이 자동 취소됩니다.<br>· 예약자명과 입금자명이 다르면 ${esc(r.phone)}로 알려주세요.<br>· 예약번호는 [예약 조회] 탭에서 확인할 수 있습니다.</p>
+    <p class="hint">· 기한 내 미입금 시 예약이 자동 취소됩니다.<br>· 예약자명과 입금자명이 다르면 ${esc(r.phone)}로 알려주세요.<br>· [예약 조회]에서 예약자 이름과 휴대폰 번호로 언제든 확인 · 취소할 수 있습니다.</p>
     <p style="margin-top:20px"><a class="btn btn-line" style="text-decoration:none;display:inline-block" href="index.html">홈페이지로</a></p>`;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -523,9 +523,38 @@ $('lk-btn').onclick = async () => {
         예약자 <b>${esc(r.name)}</b> · 일정 <b>${fmt(r.checkin)} ~ ${fmt(r.checkout)} (${r.nights}박)</b>
         <table class="sum-table" style="margin-top:8px">${rows}<tr class="tot"><td colspan="2">합계</td><td>${won(r.total)}원</td></tr></table>
         ${r.bank ? `<div class="bank">입금 계좌 <b>${esc(r.bank)}</b><br>입금 기한 <b style="color:var(--red)">${esc(r.deadline)}까지</b></div>` : ''}
-      </div>`;
+      </div>
+      ${r.canCancel ? `<button class="btn btn-line" id="cx-open" style="width:100%">예약 취소하기</button><div id="cx-area"></div>` : ''}`;
+    if (r.canCancel) $('cx-open').onclick = () => showCancel(r);
   } catch (e) { $('lk-err').textContent = e.message; }
 };
+
+function showCancel(r) {
+  $('cx-open').hidden = true;
+  const needBank = r.cancelPaid > 0 && r.refundAmount > 0;
+  $('cx-area').innerHTML = `<div class="policy" style="margin-top:12px">
+    <b>예약 취소</b>
+    <pre>${esc(r.refundPolicy)}</pre>
+    <div class="done-box" style="margin:10px 0">
+      ${r.cancelPaid ? `입금하신 금액 <b>${won(r.cancelPaid)}원</b><br>환불 비율 <b>${r.refundRate}%</b> (입실 ${fmt(r.checkin)} 기준)<br>
+        환불 예정 금액 <b style="color:var(--red);font-size:17px">${won(r.refundAmount)}원</b>` : '아직 입금 전이라 바로 취소됩니다.'}
+    </div>
+    ${needBank ? `<div class="field"><label>환불받을 은행</label><input id="cx-bank" placeholder="예: 국민은행"></div>
+      <div class="field"><label>계좌번호</label><input id="cx-acc" inputmode="numeric"></div>
+      <div class="field"><label>예금주</label><input id="cx-holder"></div>` : ''}
+    <button class="btn" id="cx-go" style="width:100%;background:var(--red)">취소 확정</button>
+    <p class="err" id="cx-err"></p></div>`;
+  $('cx-go').onclick = async () => {
+    $('cx-err').textContent = '';
+    if (!confirm('예약을 취소할까요? 취소 후에는 되돌릴 수 없습니다.')) return;
+    try {
+      const res = await api('/api/public/cancel', { code: r.code, phone: $('lk-phone').value,
+        refund_bank: $('cx-bank')?.value || '', refund_account: $('cx-acc')?.value || '', refund_holder: $('cx-holder')?.value || '' });
+      $('lk-result').innerHTML = `<div class="done"><div class="ic">✅</div><h2>예약이 취소되었습니다</h2>
+        <p class="hint">${res.refund ? `환불금 <b>${won(res.refund)}원</b>은 입력하신 계좌로 영업일 기준 3일 이내 입금됩니다.` : '이용해 주셔서 감사합니다.'}</p></div>`;
+    } catch (e) { $('cx-err').textContent = e.message; }
+  };
+}
 
 /* ---------- 시작 ---------- */
 (async () => {

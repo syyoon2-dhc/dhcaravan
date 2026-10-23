@@ -16,6 +16,7 @@ import sqlite3
 import string
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta
@@ -29,11 +30,14 @@ PRICES_FILE = os.path.join(ROOT, 'data', 'prices.json')
 ACTIVE = ('pending', 'confirmed', 'block')  # 객실을 차지하는 상태
 STATUS_LABEL = {'pending': '입금대기', 'confirmed': '예약확정', 'cancelled': '취소', 'block': '예약막음'}
 SOURCES = ('홈페이지', '전화', '현장', '땡큐캠핑', '기타')
+PAY_METHODS = ('무통장', '카드', '현금', '땡큐캠핑', '기타')
+CANCEL_BY = {'user': '사용자취소', 'admin': '관리자취소', 'auto': '입금기한초과'}
 WEEKDAY = '월화수목금토일'
 
 DEFAULT_SETTINGS = {
     'bookingOpen': True,           # 홈페이지 예약 받기
     'bank': '',                    # 입금 계좌 (예: 농협 000-0000-0000-00 홍길동) — 비어 있으면 예약 안 받음
+    'bankShort': '',               # 문자용 짧은 계좌 (예: 기업 15912505001013 윤석영) — 비우면 위 계좌 사용
     'depositHours': 3,             # 예약 후 입금 기한 (시간)
     'maxDaysAhead': 180,           # 며칠 뒤까지 예약 받을지
     'openUntil': '',               # 이 날짜 숙박까지만 예약 오픈 (비우면 maxDaysAhead 기준)
@@ -44,26 +48,40 @@ DEFAULT_SETTINGS = {
     'adminNotify': True,
     'reminderHour': 10,            # 입실 전날 안내 문자 보내는 시각
     'units': {},                   # 객실별 동시 예약 가능 수 (기본 1) 예: {"deckzone": 3}
-    'refundPolicy': '이용 7일 전: 100% 환불\n이용 5~6일 전: 70% 환불\n이용 3~4일 전: 50% 환불\n'
-                    '이용 1~2일 전 · 당일: 환불 불가\n(천재지변 등 불가항력 시 별도 협의)',
+    'refundRules': [{'days': 6, 'rate': 100}, {'days': 5, 'rate': 90}, {'days': 4, 'rate': 80},  # 이용일 N일 전 이상 취소 → 환불 %
+                    {'days': 3, 'rate': 70}, {'days': 2, 'rate': 50}, {'days': 1, 'rate': 30}, {'days': 0, 'rate': 0}],
+    'nearDepositHours': 1,         # 입실 1일 전 · 당일 예약은 입금 기한 (시간)
+    'depositReminderMinutes': 60,  # 입금 마감 N분 전 안내 문자
+    'twoNight': {'enabled': True, 'weekdays': [4, 5], 'releaseDays': 7},  # 금(4)·토(5) 입실은 2박, 입실 7일 전부터 1박 허용
+    'optionLimits': {},            # 옵션별 하루 최대 수량 {"1": 3} (옵션 번호: 수량)
+    'specialPrices': [],           # 임시요금 [{room: 'gureum' 또는 '' (전체), start, end, weekday, weekend, note}]
+    'autoBlockCancels': 3,         # 연속 N회 취소한 고객은 자동으로 '예약불가' (0 = 사용 안 함)
+    'refundNote': '환불은 취소 후 영업일 기준 3일 이내 입력하신 계좌로 입금됩니다.\n'
+                  '천재지변 등 불가항력 시 별도 협의합니다.',
+    'customerCancel': True,        # 손님이 예약조회에서 직접 취소 가능
+    'smsPrice': 8.4,               # 알리고 단문 1건 요금 (원) — 비용 계산용
+    'lmsPrice': 25,                # 알리고 장문 1건 요금 (원)
+    'monthlyFixedCost': 0,         # 월 고정비 (도메인 · 서버 등, 원)
+    'compareFeeRate': 7.7,         # 비교용: 땡큐캠핑 수수료율 (%, PG + 이용수수료)
+    'customerCategories': ['일반', '단골', 'VIP', '예약불가'],  # 고객분류 ('예약불가' = 홈페이지 예약 차단)
     'notice': '입실 15:00 / 퇴실 11:00\n매너타임 22:00 ~ 07:00 (고성방가 · 소음 자제)\n'
               '카라반 · 객실 내부는 금연입니다.\n인원 추가는 영·유아를 포함한 인원 기준입니다.',
     'allowOrigins': ['https://syyoon2-dhc.github.io'],
     'aligo': {'enabled': False, 'key': '', 'userId': '', 'sender': '', 'testmode': False},
-    'auto': {'received': True, 'confirmed': True, 'cancelled': True, 'expired': True, 'reminder': True},
-    'templates': {
-        'received': '[동해카라반펜션] {이름}님 예약이 접수되었습니다.\n'
-                    '예약번호: {예약번호}\n객실: {객실}\n일정: {입실}~{퇴실} ({박}박)\n'
-                    '금액: {금액}원\n입금계좌: {계좌}\n'
-                    '{입금기한}까지 입금해 주셔야 예약이 확정됩니다. (미입금 시 자동 취소)',
-        'confirmed': '[동해카라반펜션] {이름}님 입금이 확인되어 예약이 확정되었습니다.\n'
-                     '{객실} / {입실}~{퇴실} ({박}박)\n입실 15:00 / 퇴실 11:00\n문의 {펜션전화}',
-        'cancelled': '[동해카라반펜션] {이름}님 예약({예약번호})이 취소되었습니다.\n문의 {펜션전화}',
-        'expired': '[동해카라반펜션] 입금 기한이 지나 예약({예약번호})이 자동 취소되었습니다.\n'
-                   '다시 예약을 원하시면 홈페이지 또는 {펜션전화}로 문의해 주세요.',
-        'reminder': '[동해카라반펜션] {이름}님, 내일 {입실} 입실 예정입니다.\n'
-                    '입실은 15:00부터 가능합니다.\n주소: 울산 울주군 온산읍 강양길 162\n문의 {펜션전화}',
-        'admin': '[새 예약] {이름} {연락처}\n{객실}\n{입실}~{퇴실} {인원}명\n{금액}원 (입금대기)',
+    'telegram': {'enabled': False, 'botToken': '', 'chatId': ''},  # 사장님 알림은 텔레그램으로 (무료)
+    'auto': {'received': True, 'confirmed': True, 'cancelled': True, 'expired': True, 'reminder': True,
+             'refund_done': True, 'deposit_reminder': True},
+    'templates': {  # 단문(SMS 90바이트 = 한글 약 45자) 기준. 넘으면 장문(LMS)으로 발송
+        'received': '[동해카라반]{금액}원 {계좌} {입금기한}까지 입금시 예약확정',
+        'deposit_reminder': '[동해카라반]입금마감 1시간전입니다 {금액}원 {계좌}',
+        'confirmed': '[동해카라반]{이름}님 {입실} {객실} 예약확정. 입실15시 퇴실11시',
+        'expired': '[동해카라반]입금기한이 지나 {입실} 예약이 자동취소되었습니다',
+        'cancelled': '[동해카라반]{입실} {객실} 예약이 취소되었습니다 문의{펜션전화}',
+        'refund_done': '[동해카라반]{이름}님 환불금 {환불}원 입금완료되었습니다',
+        'reminder': '[동해카라반]내일 입실일입니다. 15시부터 입실가능. 울주군 온산읍 강양길162',
+        'admin': '[새예약]{이름} {연락처} {객실} {입실} {박}박 {금액}원',
+        'admin_cancel': '[손님취소]{이름} {연락처} {입실} {객실} 환불{환불}원',
+        'admin_expired': '[미입금 자동취소]{이름} {연락처} {객실} {입실} {금액}원',
     },
 }
 
@@ -92,11 +110,30 @@ CREATE TABLE IF NOT EXISTS reservations (
   deadline TEXT,
   cancel_reason TEXT NOT NULL DEFAULT '',
   reminded INTEGER NOT NULL DEFAULT 0,
+  pay_method TEXT NOT NULL DEFAULT '무통장',
+  paid_at TEXT,
+  cancel_by TEXT NOT NULL DEFAULT '',
+  cancelled_at TEXT,
+  refund_status TEXT NOT NULL DEFAULT '',
+  refund_bank TEXT NOT NULL DEFAULT '',
+  refund_account TEXT NOT NULL DEFAULT '',
+  refund_holder TEXT NOT NULL DEFAULT '',
+  refund_done_at TEXT,
+  deposit_reminded INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_res_dates ON reservations(room_id, checkin, checkout);
 CREATE INDEX IF NOT EXISTS idx_res_group ON reservations(group_code);
+CREATE TABLE IF NOT EXISTS customers (
+  phone TEXT PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
+  nickname TEXT NOT NULL DEFAULT '',
+  category TEXT NOT NULL DEFAULT '',
+  memo TEXT NOT NULL DEFAULT '',
+  deleted INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS sms_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at TEXT NOT NULL,
@@ -125,7 +162,27 @@ def db():
         _conn = sqlite3.connect(DB_FILE, check_same_thread=False)
         _conn.row_factory = sqlite3.Row
         _conn.executescript(SCHEMA)
+        _migrate(_conn)
     return _conn
+
+
+NEW_COLUMNS = {  # 예전 DB 파일에 없는 칸은 자동으로 추가
+    'pay_method': "TEXT NOT NULL DEFAULT '무통장'", 'paid_at': 'TEXT', 'cancel_by': "TEXT NOT NULL DEFAULT ''",
+    'cancelled_at': 'TEXT', 'refund_status': "TEXT NOT NULL DEFAULT ''", 'refund_bank': "TEXT NOT NULL DEFAULT ''",
+    'refund_account': "TEXT NOT NULL DEFAULT ''", 'refund_holder': "TEXT NOT NULL DEFAULT ''", 'refund_done_at': 'TEXT',
+    'deposit_reminded': 'INTEGER NOT NULL DEFAULT 0',
+}
+
+
+def _migrate(conn):
+    have = {r['name'] for r in conn.execute('PRAGMA table_info(reservations)')}
+    for col, typ in NEW_COLUMNS.items():
+        if col not in have:
+            conn.execute(f'ALTER TABLE reservations ADD COLUMN {col} {typ}')
+    # 예약에 있는 전화번호를 고객 목록에 등록 (처음 한 번)
+    conn.execute("INSERT OR IGNORE INTO customers (phone, name, created_at) "
+                 "SELECT phone, name, MIN(created_at) FROM reservations WHERE phone != '' GROUP BY phone")
+    conn.commit()
 
 
 def now_str():
@@ -164,10 +221,56 @@ def save_settings(data):
     s['units'] = {k: max(1, int(v)) for k, v in (s.get('units') or {}).items() if str(v).strip()}
     if s.get('openUntil'):
         parse_date(s['openUntil'], '예약 오픈 마감일')
+    rules = {}
+    for r in s.get('refundRules') or []:
+        try:
+            rules[max(0, int(r['days']))] = min(100, max(0, int(r['rate'])))
+        except (KeyError, ValueError, TypeError):
+            continue
+    s['refundRules'] = [{'days': d, 'rate': rules[d]} for d in sorted(rules, reverse=True)]
+    s['nearDepositHours'] = max(1, int(s.get('nearDepositHours') or 1))
+    s['depositReminderMinutes'] = max(0, int(s.get('depositReminderMinutes') or 0))
+    s['autoBlockCancels'] = max(0, int(s.get('autoBlockCancels') or 0))
+    tn = s.get('twoNight') or {}
+    s['twoNight'] = {'enabled': bool(tn.get('enabled')), 'releaseDays': max(0, int(tn.get('releaseDays') or 0)),
+                     'weekdays': sorted({int(w) for w in tn.get('weekdays') or [] if 0 <= int(w) <= 6})}
+    s['optionLimits'] = {str(k): int(v) for k, v in (s.get('optionLimits') or {}).items() if str(v).strip() and int(v) > 0}
+    specials = []
+    for sp in s.get('specialPrices') or []:
+        st, en = parse_date(sp.get('start'), '임시요금 시작일'), parse_date(sp.get('end'), '임시요금 종료일')
+        if en < st:
+            raise BookingError('임시요금 종료일이 시작일보다 빠릅니다')
+        specials.append({'room': sp.get('room') or '', 'start': st.isoformat(), 'end': en.isoformat(),
+                         'weekday': int(sp.get('weekday') or 0), 'weekend': int(sp.get('weekend') or 0),
+                         'note': str(sp.get('note', ''))[:50]})
+    s['specialPrices'] = sorted(specials, key=lambda x: x['start'])
     os.makedirs(PRIVATE_DIR, exist_ok=True)
     with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
         json.dump(s, f, ensure_ascii=False, indent=2)
     return s
+
+
+def refund_policy_text(settings):
+    rules = sorted(settings.get('refundRules') or [], key=lambda r: -r['days'])
+    lines = []
+    for k, r in enumerate(rules):
+        if r['days'] == 0:
+            when = '이용 당일' if k == 0 else (f'이용 {rules[k - 1]["days"] - 1}일 전 ~ 당일' if rules[k - 1]['days'] > 1 else '이용 당일')
+        elif k == 0:
+            when = f'이용 {r["days"]}일 전까지'
+        else:
+            hi = rules[k - 1]['days'] - 1
+            when = f'이용 {r["days"]}일 전' if hi == r['days'] else f'이용 {r["days"]}~{hi}일 전'
+        lines.append(f'{when}: ' + ('환불 불가' if r['rate'] == 0 else f'{r["rate"]}% 환불'))
+    return '\n'.join(lines + [settings.get('refundNote', '')]).strip()
+
+
+def refund_rate(settings, checkin):
+    days = (date.fromisoformat(checkin) - date.today()).days
+    for r in sorted(settings.get('refundRules') or [], key=lambda r: -r['days']):
+        if days >= r['days']:
+            return r['rate']
+    return 0
 
 
 # ──────────────────────────────────────────────
@@ -209,8 +312,12 @@ def day_info(prices, d):
     return peak, weekend
 
 
-def night_price(prices, room, d):
+def night_price(prices, room, d, specials=()):
     peak, weekend = day_info(prices, d)
+    ds = d.isoformat()
+    for sp in specials:  # 임시요금 (나중에 등록한 것보다 기간이 겹치면 먼저 등록된 것 우선)
+        if sp['room'] in ('', room['id']) and sp['start'] <= ds <= sp['end']:
+            return sp['weekend' if weekend else 'weekday'], peak, weekend
     return room['price']['peak' if peak else 'normal'][1 if weekend else 0], peak, weekend
 
 
@@ -248,9 +355,10 @@ def quote(room_id, checkin, checkout, guests, options=None, prices=None, max_nig
         raise BookingError(f'{room["name"]}은(는) 최대 {room["max"]}명까지 이용할 수 있습니다')
 
     nights = []
+    specials = load_settings().get('specialPrices') or []
     for k in range(nights_n):
         d = ci + timedelta(days=k)
-        p, peak, weekend = night_price(prices, room, d)
+        p, peak, weekend = night_price(prices, room, d, specials)
         nights.append({'date': d.isoformat(), 'price': p, 'peak': peak, 'weekend': weekend})
     room_amount = sum(n['price'] for n in nights)
     extra_n = max(0, guests - room['std'])
@@ -353,6 +461,10 @@ def row_dict(r):
     d['status_label'] = STATUS_LABEL.get(d['status'], d['status'])
     d['nights'] = (date.fromisoformat(d['checkout']) - date.fromisoformat(d['checkin'])).days
     d['phone_fmt'] = fmt_phone(d['phone'])
+    d['cancel_by_label'] = CANCEL_BY.get(d.get('cancel_by') or '', '')
+    d['refund_label'] = {'due': '환불예정', 'done': '환불완료'}.get(d.get('refund_status') or '', '')
+    d['refund_info'] = ' '.join(x for x in (d.get('refund_bank'), d.get('refund_account'), d.get('refund_holder')) if x)
+    d['discount'] = d['room_amount'] + d['extra_amount'] + d['option_amount'] - d['total']
     return d
 
 
@@ -368,16 +480,72 @@ def group_rows(group_code):
         'SELECT * FROM reservations WHERE group_code=? ORDER BY id', (group_code,)).fetchall()]
 
 
-def _insert(q, status, source, deadline, name, phone, request, memo, total, paid, code, group_code):
+def _insert(q, status, source, deadline, name, phone, request, memo, total, paid, code, group_code, pay_method='무통장'):
     ts = now_str()
     cur = db().execute(
         'INSERT INTO reservations (code, group_code, room_id, checkin, checkout, guests, name, phone, request, memo, '
-        'options, room_amount, extra_amount, option_amount, total, paid, status, source, deadline, created_at, '
-        'updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+        'options, room_amount, extra_amount, option_amount, total, paid, status, source, deadline, pay_method, '
+        'paid_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
         (code, group_code, q['room_id'], q['checkin'], q['checkout'], q['guests'], name, phone, request, memo,
          json.dumps(q['options'], ensure_ascii=False), q['room_amount'], q['extra_amount'], q['option_amount'],
-         total, paid, status, source, deadline, ts, ts))
+         total, paid, status, source, deadline, pay_method, ts if paid else None, ts, ts))
+    if phone:
+        db().execute('INSERT OR IGNORE INTO customers (phone, name, created_at) VALUES (?,?,?)', (phone, name, ts))
     return cur.lastrowid
+
+
+def deposit_deadline(settings, checkin, hours=None):
+    """입금 기한: 기본 N시간 / 입실 1일 전 · 당일 예약은 1시간 / 입실일 자정을 넘으면 입실 전날 23:59"""
+    now = datetime.now()
+    ci = date.fromisoformat(checkin)
+    if hours is None:
+        hours = settings['nearDepositHours'] if (ci - now.date()).days <= 1 else settings['depositHours']
+    deadline = now + timedelta(hours=int(hours))
+    cap = datetime.combine(ci, datetime.min.time()) - timedelta(minutes=1)
+    if cap > now + timedelta(minutes=30):
+        deadline = min(deadline, cap)
+    return deadline.strftime('%Y-%m-%d %H:%M:%S')
+
+
+def check_two_night(settings, checkin, checkout):
+    """2박 우선: 금 · 토 입실은 2박 이상 (입실 N일 전부터는 1박 가능)"""
+    tn = settings.get('twoNight') or {}
+    ci, co = date.fromisoformat(checkin), date.fromisoformat(checkout)
+    if not tn.get('enabled') or (co - ci).days != 1 or ci.weekday() not in tn.get('weekdays', []):
+        return
+    if (ci - date.today()).days < tn.get('releaseDays', 0):
+        return
+    days = '·'.join('월화수목금토일'[w] for w in tn['weekdays'])
+    raise BookingError(f'{days}요일 입실은 2박 이상 예약할 수 있습니다. '
+                       f'(입실 {tn["releaseDays"]}일 전부터는 1박도 가능)')
+
+
+def check_option_limits(settings, quotes):
+    """옵션 하루 수량 제한 (예: 바비큐 장비 하루 3개)"""
+    limits = settings.get('optionLimits') or {}
+    if not limits:
+        return
+    ci, co = quotes[0]['checkin'], quotes[0]['checkout']
+    want = {}
+    for q in quotes:
+        for o in q['options']:
+            want[str(o['i'])] = want.get(str(o['i']), 0) + o['qty']
+    rows = [row_dict(r) for r in db().execute(
+        "SELECT * FROM reservations WHERE status IN ('pending','confirmed') AND checkin < ? AND checkout > ? "
+        "AND options != '[]'", (co, ci)).fetchall()]
+    d = date.fromisoformat(ci)
+    while d < date.fromisoformat(co):
+        ds = d.isoformat()
+        for i, qty in want.items():
+            if i not in limits:
+                continue
+            used = sum(o['qty'] for r in rows if r['checkin'] <= ds < r['checkout'] for o in r['options']
+                       if str(o['i']) == i)
+            if used + qty > limits[i]:
+                name = next(o['name'] + ' ' + o.get('detail', '') for q in quotes for o in q['options'] if str(o['i']) == i)
+                left = max(0, limits[i] - used)
+                raise BookingError(f'{fmt_day(ds)} {name}은(는) {left}개만 남았습니다')
+        d += timedelta(days=1)
 
 
 def check_open_range(settings, checkin, checkout):
@@ -400,6 +568,8 @@ def create_web_booking(data):
         raise BookingError('예약자 이름을 입력해 주세요')
     if not valid_mobile(phone):
         raise BookingError('휴대폰 번호를 정확히 입력해 주세요')
+    if is_blocked_customer(phone):
+        raise BookingError(f'온라인 예약이 어려운 번호입니다. {settings["phone"]}로 문의해 주세요')
     items = data.get('items') or []
     if not isinstance(items, list) or not items:
         raise BookingError('객실을 선택해 주세요')
@@ -411,14 +581,16 @@ def create_web_booking(data):
     quotes = [quote(it.get('room_id'), data.get('checkin'), data.get('checkout'), it.get('guests'),
                     it.get('options'), prices, settings['maxNights']) for it in items]
     request = str(data.get('request', '')).strip()[:500]
+    check_two_night(settings, quotes[0]['checkin'], quotes[0]['checkout'])
 
     with _lock:
         expire_overdue()
         for q in quotes:
             if not is_available(settings, q['room_id'], q['checkin'], q['checkout']):
                 raise BookingError(f'{q["room_name"]}은(는) 방금 다른 분이 예약했습니다. 다시 선택해 주세요')
+        check_option_limits(settings, quotes)
         base = new_code()
-        deadline = (datetime.now() + timedelta(hours=settings['depositHours'])).strftime('%Y-%m-%d %H:%M:%S')
+        deadline = deposit_deadline(settings, quotes[0]['checkin'])
         for k, q in enumerate(quotes):
             code = base if len(quotes) == 1 else f'{base}-{k + 1}'
             _insert(q, 'pending', '홈페이지', deadline, name, phone, request, '', q['total'], 0, code, base)
@@ -441,6 +613,7 @@ def create_reservation(data):
     name = str(data.get('name', '')).strip()[:30]
     phone = norm_phone(data.get('phone'))
     source = data.get('source') if data.get('source') in SOURCES else '기타'
+    pay_method = data.get('pay_method') if data.get('pay_method') in PAY_METHODS else '무통장'
 
     if status == 'block':
         q = quote(data.get('room_id'), data.get('checkin'), data.get('checkout'), 1, [], prices)
@@ -464,13 +637,10 @@ def create_reservation(data):
         expire_overdue()
         if not data.get('force') and not is_available(settings, q['room_id'], q['checkin'], q['checkout']):
             raise BookingError('해당 날짜에 이미 예약이 있습니다')
-        deadline = None
-        if status == 'pending':
-            hours = int(data.get('depositHours') or settings['depositHours'])
-            deadline = (datetime.now() + timedelta(hours=hours)).strftime('%Y-%m-%d %H:%M:%S')
+        deadline = deposit_deadline(settings, q['checkin'], data.get('depositHours')) if status == 'pending' else None
         code = new_code()
         rid = _insert(q, status, source, deadline, name, phone, str(data.get('request', '')).strip()[:500],
-                      str(data.get('memo', '')).strip()[:1000], total, paid, code, code)
+                      str(data.get('memo', '')).strip()[:1000], total, paid, code, code, pay_method)
         db().commit()
         r = get_reservation(rid)
 
@@ -480,7 +650,8 @@ def create_reservation(data):
 
 
 EDITABLE = ('room_id', 'checkin', 'checkout', 'guests', 'name', 'phone', 'request', 'memo', 'source',
-            'room_amount', 'extra_amount', 'option_amount', 'total', 'paid', 'refund', 'deadline', 'options')
+            'room_amount', 'extra_amount', 'option_amount', 'total', 'paid', 'refund', 'deadline', 'options',
+            'pay_method', 'refund_bank', 'refund_account', 'refund_holder', 'refund_status')
 
 
 def update_reservation(rid, data):
@@ -494,6 +665,10 @@ def update_reservation(rid, data):
                 raise BookingError('휴대폰 번호를 정확히 입력해 주세요')
         if 'source' in new and new['source'] not in SOURCES:
             new['source'] = '기타'
+        if 'pay_method' in new and new['pay_method'] not in PAY_METHODS:
+            new['pay_method'] = '기타'
+        if 'refund_status' in new and new['refund_status'] not in ('', 'due', 'done'):
+            new['refund_status'] = ''
         for k in ('guests', 'room_amount', 'extra_amount', 'option_amount', 'total', 'paid', 'refund'):
             if k in new:
                 new[k] = int(new[k] or 0)
@@ -541,16 +716,25 @@ def set_status(rid, status, data=None):
             if status == 'confirmed':
                 fields['paid'] = int(data['paid']) if single and data.get('paid') not in (None, '') else t['total']
                 fields['deadline'] = None
+                fields['paid_at'] = now_str()
+                if data.get('pay_method') in PAY_METHODS:
+                    fields['pay_method'] = data['pay_method']
             elif status == 'cancelled':
-                fields['cancel_reason'] = str(data.get('reason', '')).strip()[:200] or '관리자 취소'
-                fields['refund'] = int(data.get('refund') or 0) if single else (t['paid'] if data.get('refundAll') else 0)
+                refund = int(data.get('refund') or 0) if single else (t['paid'] if data.get('refundAll') else 0)
+                fields.update(cancel_reason=str(data.get('reason', '')).strip()[:200] or '관리자 취소',
+                              cancel_by='admin', cancelled_at=now_str(), refund=refund,
+                              refund_status='due' if refund > 0 else '', deadline=None,
+                              refund_bank=str(data.get('refund_bank', '')).strip()[:30],
+                              refund_account=str(data.get('refund_account', '')).strip()[:40],
+                              refund_holder=str(data.get('refund_holder', '')).strip()[:30])
             elif status == 'pending':
-                fields['deadline'] = (datetime.now() + timedelta(hours=settings['depositHours'])).strftime('%Y-%m-%d %H:%M:%S')
+                fields['deadline'] = deposit_deadline(settings, t['checkin'])
+                fields['deposit_reminded'] = 0
             if t['status'] == 'cancelled':
                 if not is_available(settings, t['room_id'], t['checkin'], t['checkout'], exclude_id=t['id']):
                     raise BookingError('그 사이에 같은 날짜에 다른 예약이 들어와 복구할 수 없습니다')
-                fields['cancel_reason'] = ''
-                fields['refund'] = 0
+                fields.update(cancel_reason='', refund=0, cancel_by='', cancelled_at=None, refund_status='',
+                              refund_done_at=None)
             db().execute(f'UPDATE reservations SET {", ".join(k + "=?" for k in fields)} WHERE id=?',
                          (*fields.values(), t['id']))
         db().commit()
@@ -566,11 +750,27 @@ def delete_reservation(rid):
         db().commit()
 
 
-def list_reservations(start=None, end=None, status=None, q=None):
+def list_reservations(start=None, end=None, status=None, q=None, basis='stay', room=None, refund_status=None,
+                      cancel_by=None):
+    """basis: stay=숙박 기간이 겹치는 예약 / checkin=입실일 / created=신청일 / cancelled=취소일 기준"""
     sql, args = 'SELECT * FROM reservations WHERE 1=1', []
-    if start and end:  # 해당 기간에 걸쳐 있는 예약
-        sql += ' AND checkin < ? AND checkout > ?'
-        args += [end, start]
+    if start and end:
+        if basis == 'stay':
+            sql += ' AND checkin < ? AND checkout > ?'
+            args += [end, start]
+        else:
+            col = {'checkin': 'checkin', 'created': 'created_at', 'cancelled': 'cancelled_at'}.get(basis, 'checkin')
+            sql += f' AND {col} >= ? AND {col} < ?'
+            args += [start, end]
+    if room:
+        sql += ' AND room_id=?'
+        args.append(room)
+    if refund_status:
+        sql += f' AND refund_status IN ({",".join("?" * len(refund_status))})'
+        args += list(refund_status)
+    if cancel_by:
+        sql += ' AND cancel_by=?'
+        args.append(cancel_by)
     if status:
         sql += f' AND status IN ({",".join("?" * len(status))})'
         args += list(status)
@@ -582,23 +782,41 @@ def list_reservations(start=None, end=None, status=None, q=None):
             sql += ' OR phone LIKE ?'
             args.append(f'%{norm_phone(q)}%')
         sql += ')'
-    sql += ' ORDER BY checkin, room_id LIMIT 3000'
+    order = {'created': 'created_at DESC', 'cancelled': 'cancelled_at DESC'}.get(basis, 'checkin, room_id')
+    sql += f' ORDER BY {order} LIMIT 3000'
     with _lock:
         return [row_dict(r) for r in db().execute(sql, args).fetchall()]
 
 
 def lookup(code, phone):
-    code, phone = str(code or '').strip().upper(), norm_phone(phone)
+    """예약번호 또는 예약자 이름 + 휴대폰으로 조회. 이름으로 찾으면 다가오는 예약(없으면 최근 예약)"""
+    key, phone = str(code or '').strip(), norm_phone(phone)
+    rows = []
     with _lock:
-        rows = [row_dict(r) for r in db().execute(
-            "SELECT * FROM reservations WHERE (group_code=? OR code=?) AND phone=? AND status != 'block' ORDER BY id",
-            (code, code, phone)).fetchall()] if code and phone else []
+        if key and phone:
+            found = [row_dict(r) for r in db().execute(
+                "SELECT * FROM reservations WHERE (group_code=? OR code=? OR name=?) AND phone=? AND status != 'block' "
+                "ORDER BY id", (key.upper(), key.upper(), key, phone)).fetchall()]
+            groups = {}
+            for r in found:
+                groups.setdefault(r['group_code'] or r['code'], []).append(r)
+            if groups:
+                today = date.today().isoformat()
+                upcoming = sorted((g for g in groups.values() if g[0]['checkout'] > today and
+                                   any(x['status'] != 'cancelled' for x in g)), key=lambda g: g[0]['checkin'])
+                rows = upcoming[0] if upcoming else max(groups.values(), key=lambda g: g[0]['created_at'])
     if not rows:
-        raise BookingError('예약 내역을 찾을 수 없습니다. 예약번호와 휴대폰 번호를 확인해 주세요')
+        raise BookingError('예약 내역을 찾을 수 없습니다. 예약번호(또는 예약자 이름)와 휴대폰 번호를 확인해 주세요')
     names = {r['id']: r['name'] for r in load_prices()['rooms']}
     settings = load_settings()
     pending = any(r['status'] == 'pending' for r in rows)
+    active = [r for r in rows if r['status'] in ('pending', 'confirmed')]
+    paid = sum(r['paid'] for r in active)
+    rate = refund_rate(settings, rows[0]['checkin'])
+    can_cancel = bool(settings.get('customerCancel')) and bool(active) and rows[0]['checkin'] >= date.today().isoformat()
     return {
+        'canCancel': can_cancel, 'cancelPaid': paid, 'refundRate': rate,
+        'refundAmount': refund_amount(paid, rate),
         'code': rows[0]['group_code'] or rows[0]['code'], 'name': rows[0]['name'],
         'checkin': rows[0]['checkin'], 'checkout': rows[0]['checkout'], 'nights': rows[0]['nights'],
         'items': [{'room_name': names.get(r['room_id'], r['room_id']), 'guests': r['guests'], 'total': r['total'],
@@ -607,8 +825,190 @@ def lookup(code, phone):
         'paid': sum(r['paid'] for r in rows),
         'deadline': fmt_deadline(rows[0]['deadline']) if pending else '',
         'bank': settings['bank'] if pending else '', 'phone': settings['phone'],
-        'refundPolicy': settings['refundPolicy'],
+        'refundPolicy': refund_policy_text(settings),
     }
+
+
+def refund_amount(paid, rate):
+    return paid * rate // 100 // 10 * 10  # 10원 단위 절사
+
+
+def customer_cancel(code, phone, data):
+    """손님이 예약조회에서 직접 취소 (사용자취소). 입금한 돈이 있으면 환불 계좌 필요"""
+    settings = load_settings()
+    if not settings.get('customerCancel'):
+        raise BookingError(f'예약 취소는 {settings["phone"]}로 연락 주세요')
+    info = lookup(code, phone)
+    if not info['canCancel']:
+        raise BookingError(f'취소할 수 있는 예약이 없습니다. 문의 {settings["phone"]}')
+    bank = {k: str(data.get(k, '')).strip()[:40] for k in ('refund_bank', 'refund_account', 'refund_holder')}
+    if info['cancelPaid'] and info['refundAmount'] and not all(bank.values()):
+        raise BookingError('환불받을 은행 · 계좌번호 · 예금주를 입력해 주세요')
+    rate = refund_rate(settings, info['checkin'])
+    with _lock:
+        rows = [r for r in group_rows(info['code']) if r['status'] in ('pending', 'confirmed')
+                and r['phone'] == norm_phone(phone)]
+        for r in rows:
+            refund = refund_amount(r['paid'], rate)
+            db().execute(
+                "UPDATE reservations SET status='cancelled', cancel_by='user', cancelled_at=?, deadline=NULL, "
+                "cancel_reason=?, refund=?, refund_status=?, refund_bank=?, refund_account=?, refund_holder=?, "
+                "updated_at=? WHERE id=?",
+                (now_str(), f'고객 직접 취소 (환불 {rate}%)' if r['paid'] else '고객 직접 취소 (입금 전)', refund,
+                 'due' if refund else '', bank['refund_bank'], bank['refund_account'], bank['refund_holder'],
+                 now_str(), r['id']))
+        db().commit()
+        rows = [get_reservation(r['id']) for r in rows]
+    notify('cancelled', rows)
+    if settings.get('adminNotify'):
+        notify('admin_cancel', rows)
+    check_auto_block(phone)
+    return {'refund': sum(r['refund'] for r in rows)}
+
+
+def refund_done(ids, done=True, sms=True):
+    """환불현황: 환불 완료 처리 (또는 환불예정으로 되돌리기). 완료 시 손님에게 환불완료 문자"""
+    with _lock:
+        changed = []
+        for rid in ids:
+            cur = db().execute("UPDATE reservations SET refund_status=?, refund_done_at=?, updated_at=? "
+                               "WHERE id=? AND refund > 0 AND refund_status != ?",
+                               ('done' if done else 'due', now_str() if done else None, now_str(), int(rid),
+                                'done' if done else 'due'))
+            if cur.rowcount:
+                changed.append(int(rid))
+        db().commit()
+        rows = [get_reservation(r) for r in changed]
+    if done and sms:
+        for group in _by_group(rows):
+            if group[0]['phone']:
+                notify('refund_done', group)
+
+
+def check_auto_block(phone):
+    """예약제재: 연속 N회 취소한 고객은 자동으로 '예약불가' 분류"""
+    n = int(load_settings().get('autoBlockCancels') or 0)
+    phone = norm_phone(phone)
+    if not n or not phone:
+        return
+    with _lock:
+        st = _customer_stats().get(phone)
+        if st and st['cancel_streak'] >= n:
+            db().execute("UPDATE customers SET category=?, memo=CASE WHEN memo='' THEN ? ELSE memo END "
+                         "WHERE phone=? AND category IN ('', '일반')",
+                         (BLOCK_CATEGORY, f'연속 {st["cancel_streak"]}회 취소로 자동 예약제한 ({now_str()[:10]})', phone))
+            db().commit()
+
+
+def block_all(day, reason):
+    """전체예약불가: 그날 밤 비어 있는 모든 객실을 예약막음"""
+    d = parse_date(day)
+    settings, prices = load_settings(), load_prices()
+    made = 0
+    with _lock:
+        for room in prices['rooms']:
+            free = units_of(settings, room['id']) - booked_counts(room['id'], d, d + timedelta(days=1)).get(d, 0)
+            for _ in range(max(0, free)):
+                code = new_code()
+                q = {'room_id': room['id'], 'checkin': d.isoformat(), 'checkout': (d + timedelta(days=1)).isoformat(),
+                     'guests': 0, 'options': [], 'room_amount': 0, 'extra_amount': 0, 'option_amount': 0}
+                _insert(q, 'block', '기타', None, (reason or '전체예약불가')[:30], '', '', '', 0, 0, code, code)
+                made += 1
+        db().commit()
+    return made
+
+
+def block_range(room_id, start, end, reason):
+    """휴장일 등록: 객실(또는 전체 객실)의 기간을 막음. 이미 예약된 날은 건너뛰고 빈 날만 막음"""
+    s_, e_ = parse_date(start, '시작일'), parse_date(end, '종료일')
+    if e_ < s_:
+        raise BookingError('종료일이 시작일보다 빠릅니다')
+    settings, prices = load_settings(), load_prices()
+    rooms = [r for r in prices['rooms'] if not room_id or r['id'] == room_id]
+    made, skipped = 0, 0
+    with _lock:
+        for room in rooms:
+            counts = booked_counts(room['id'], s_, e_ + timedelta(days=1))
+            seg = None
+            d = s_
+            while d <= e_ + timedelta(days=1):
+                free = d <= e_ and counts.get(d, 0) < units_of(settings, room['id'])
+                if d <= e_ and not free:
+                    skipped += 1
+                if free and seg is None:
+                    seg = d
+                if not free and seg is not None:
+                    code = new_code()
+                    q = {'room_id': room['id'], 'checkin': seg.isoformat(), 'checkout': d.isoformat(), 'guests': 0,
+                         'options': [], 'room_amount': 0, 'extra_amount': 0, 'option_amount': 0}
+                    _insert(q, 'block', '기타', None, (reason or '휴장')[:30], '', '', '', 0, 0, code, code)
+                    made += 1
+                    seg = None
+                d += timedelta(days=1)
+        db().commit()
+    return {'made': made, 'skipped': skipped}
+
+
+def monthly_report(start_month, end_month, basis='created'):
+    """월별현황: 월별 총예약 · 완료 · 대기 · 환불 · 취소 · 부분취소 건수 (객실 단위)"""
+    col = 'substr(created_at,1,7)' if basis == 'created' else 'substr(checkin,1,7)'
+    with _lock:
+        rows = [dict(r) for r in db().execute(
+            f"SELECT {col} AS m, status, refund, group_code FROM reservations "
+            f"WHERE status != 'block' AND {col} >= ? AND {col} <= ?", (start_month, end_month)).fetchall()]
+        groups = {}
+        for r in db().execute("SELECT group_code, status FROM reservations WHERE status != 'block'"):
+            groups.setdefault(r['group_code'], set()).add(r['status'] == 'cancelled')
+    out = {}
+    for r in rows:
+        m = out.setdefault(r['m'], {'month': r['m'], 'total': 0, 'confirmed': 0, 'pending': 0, 'refunded': 0,
+                                    'cancelled': 0, 'partial': 0, '_groups': set()})
+        m['total'] += 1
+        if r['status'] in ('confirmed', 'pending'):
+            m[r['status']] += 1
+        if r['status'] == 'cancelled':
+            m['cancelled'] += 1
+            m['refunded'] += int(r['refund'] > 0)
+            if groups.get(r['group_code']) == {True, False} and r['group_code'] not in m['_groups']:
+                m['partial'] += 1  # 여러 객실 중 일부만 취소된 예약
+                m['_groups'].add(r['group_code'])
+    result = []
+    for m in sorted(out):
+        out[m].pop('_groups')
+        result.append(out[m])
+    return result
+
+
+def options_calendar(month):
+    """추가신청현황: 입실일별 추가상품(바비큐 등) 신청 내역"""
+    first = parse_date(str(month) + '-01', '월')
+    nxt = (first.replace(day=28) + timedelta(days=4)).replace(day=1)
+    names = {r['id']: r['name'] for r in load_prices()['rooms']}
+    days = {}
+    for r in list_reservations(first.isoformat(), nxt.isoformat(), ['pending', 'confirmed'], basis='checkin'):
+        for o in r['options']:
+            days.setdefault(r['checkin'], []).append({
+                'id': r['id'], 'name': o['name'], 'detail': o.get('detail', ''), 'qty': o['qty'],
+                'guest': r['name'], 'phone': r['phone_fmt'], 'room': names.get(r['room_id'], r['room_id']),
+                'status': r['status']})
+    return {'month': month, 'days': days}
+
+
+def bulk_sms(ids, kind, msg):
+    """선택한 예약들에 문자 (같은 예약번호는 1통만)"""
+    settings = load_settings()
+    with _lock:
+        rows = [get_reservation(int(i)) for i in ids]
+    sent = 0
+    for group in _by_group(rows):
+        if not group[0]['phone']:
+            continue
+        text = render_template(settings['templates'].get(kind, '') if kind else msg, group, settings)
+        if text.strip():
+            threading.Thread(target=send_sms, args=(group[0]['phone'], text, kind or 'manual', group[0]['id']),
+                             daemon=True).start()
+            sent += 1
+    return sent
 
 
 # ──────────────────────────────────────────────
@@ -645,6 +1045,7 @@ def search(checkin, checkout):
     """선택한 날짜에 객실별 예약 가능 여부와 기준인원 요금"""
     settings, prices = load_settings(), load_prices()
     check_open_range(settings, checkin, checkout)
+    check_two_night(settings, checkin, checkout)
     out = []
     with _lock:
         expire_overdue()
@@ -666,7 +1067,8 @@ def public_info():
         'open': bool(settings.get('bookingOpen')) and bool(settings.get('bank')),
         'phone': settings['phone'], 'depositHours': settings['depositHours'],
         'openUntil': open_until(settings).isoformat(), 'maxNights': settings['maxNights'],
-        'maxRooms': settings['maxRooms'], 'refundPolicy': settings['refundPolicy'],
+        'maxRooms': settings['maxRooms'], 'refundPolicy': refund_policy_text(settings),
+        'customerCancel': bool(settings.get('customerCancel')),
         'notice': settings['notice'], 'today': date.today().isoformat(),
         'options': [{'i': o['i'], 'name': o['name'], 'detail': o.get('detail', ''), 'price': o['amount']}
                     for o in paid_options(prices)],
@@ -699,7 +1101,9 @@ def render_template(tpl, rows, settings=None):
         '입실': fmt_day(r['checkin']), '퇴실': fmt_day(r['checkout']), '박': r['nights'],
         '인원': sum(x['guests'] for x in rows),
         '금액': f"{sum(x['total'] for x in rows):,}", '잔금': f"{sum(x['total'] - x['paid'] for x in rows):,}",
-        '계좌': settings['bank'], '입금기한': fmt_deadline(r.get('deadline')), '펜션전화': settings['phone'],
+        '환불': f"{sum(x['refund'] for x in rows):,}",
+        '계좌': settings.get('bankShort') or settings['bank'], '입금기한': fmt_deadline(r.get('deadline')),
+        '펜션전화': settings['phone'],
     }
     return re.sub(r'\{([^{}]+)\}', lambda m: str(vals.get(m.group(1), m.group(0))), tpl)
 
@@ -732,7 +1136,8 @@ def send_sms(phone, msg, kind='manual', reservation_id=None):
         try:
             res = aligo_call('send/', fields, settings)
             ok = int(res.get('result_code', -1)) > 0
-            result = str(res.get('message', '')) + (' (테스트모드 — 실제 발송 안 됨)' if a.get('testmode') else '')
+            result = str(res.get('message', '')) + (' · 장문' if lms else '') + \
+                (' (테스트모드 — 실제 발송 안 됨)' if a.get('testmode') else '')
         except Exception as e:  # 네트워크 오류 등
             ok, result = False, f'발송 오류: {e}'
     with _lock:
@@ -742,10 +1147,92 @@ def send_sms(phone, msg, kind='manual', reservation_id=None):
     return ok, result
 
 
+TELEGRAM_LOG = '텔레그램'  # 발송 기록의 받는 번호 칸 (문자비 계산에서 제외)
+
+
+def telegram_call(method, params, settings=None):
+    settings = settings or load_settings()
+    token = (settings.get('telegram') or {}).get('botToken', '').strip()
+    if not token:
+        raise BookingError('텔레그램 봇 토큰을 먼저 입력하세요')
+    body = urllib.parse.urlencode(params).encode('utf-8')
+    req = urllib.request.Request(f'https://api.telegram.org/bot{token}/{method}', data=body)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read().decode('utf-8'))
+    except urllib.error.HTTPError as e:
+        try:
+            msg = json.loads(e.read().decode('utf-8')).get('description', str(e))
+        except Exception:
+            msg = str(e)
+        raise BookingError(f'텔레그램 오류: {msg}')
+    except Exception as e:
+        raise BookingError(f'텔레그램 연결 실패: {e}')
+
+
+def send_telegram(text, kind='admin', reservation_id=None):
+    settings = load_settings()
+    tg = settings.get('telegram') or {}
+    try:
+        if not tg.get('chatId'):
+            raise BookingError('텔레그램 채팅 ID가 없습니다')
+        res = telegram_call('sendMessage', {'chat_id': tg['chatId'], 'text': text}, settings)
+        ok, result = bool(res.get('ok')), '텔레그램 (무료)'
+    except BookingError as e:
+        ok, result = False, str(e)
+    with _lock:
+        db().execute('INSERT INTO sms_log (created_at, reservation_id, phone, kind, msg, ok, result) '
+                     'VALUES (?,?,?,?,?,?,?)', (now_str(), reservation_id, TELEGRAM_LOG, kind, text, int(ok), result))
+        db().commit()
+    return ok, result
+
+
+def telegram_find_chat():
+    """봇에게 아무 메시지나 보낸 뒤 누르면 채팅 ID 를 찾아줌"""
+    res = telegram_call('getUpdates', {'limit': 20})
+    for u in reversed(res.get('result', [])):
+        msg = u.get('message') or u.get('channel_post') or {}
+        chat = msg.get('chat')
+        if chat:
+            name = chat.get('title') or ' '.join(x for x in (chat.get('last_name'), chat.get('first_name')) if x)
+            return {'chatId': str(chat['id']), 'name': name or chat.get('username', '')}
+    raise BookingError('봇에게 온 메시지가 없습니다. 텔레그램에서 봇에게 아무 말이나 보낸 뒤 다시 눌러 주세요')
+
+
+def admin_detail_text(kind, rows, settings):
+    """텔레그램용 자세한 알림 (길이 제한 없음)"""
+    names = {r['id']: r['name'] for r in load_prices()['rooms']}
+    r = rows[0]
+    title = {'admin': '🔔 새 예약 (입금대기)', 'admin_cancel': '↩️ 손님 직접 취소',
+             'admin_expired': '⏰ 미입금 자동취소'}.get(kind, '알림')
+    lines = [title, f'{r["name"]} {fmt_phone(r["phone"])}', f'{fmt_day(r["checkin"])} ~ {fmt_day(r["checkout"])} ({r["nights"]}박)']
+    for x in rows:
+        opts = ', '.join(f'{o["name"]} {o.get("detail", "")} x{o["qty"]}' for o in x['options'])
+        lines.append(f'· {names.get(x["room_id"], x["room_id"])} {x["guests"]}명 {x["total"]:,}원' + (f' ({opts})' if opts else ''))
+    lines.append(f'합계 {sum(x["total"] for x in rows):,}원')
+    if kind == 'admin' and r.get('deadline'):
+        lines.append(f'입금기한 {fmt_deadline(r["deadline"])}')
+    if kind == 'admin_cancel':
+        refund = sum(x['refund'] for x in rows)
+        lines.append(f'환불할 금액 {refund:,}원' + (f' → {r["refund_info"]}' if refund and r.get('refund_info') else ''))
+    if r.get('request'):
+        lines.append(f'요청: {r["request"]}')
+    lines.append(f'예약번호 {r["group_code"] or r["code"]}')
+    return '\n'.join(lines)
+
+
 def notify(kind, rows):
     """자동 문자 (백그라운드로 발송 — 예약 처리가 문자 때문에 느려지지 않게)"""
     settings = load_settings()
-    if kind != 'admin' and not settings['auto'].get(kind, True):
+    if kind.startswith('admin'):
+        tg = settings.get('telegram') or {}
+        if tg.get('enabled') and tg.get('chatId'):  # 사장님 알림은 텔레그램 (무료, 자세히)
+            threading.Thread(target=send_telegram, args=(admin_detail_text(kind, rows, settings), kind, rows[0]['id']),
+                             daemon=True).start()
+            return
+        if kind == 'admin_expired':  # 자동취소 알림은 텔레그램일 때만 (문자비 절약)
+            return
+    elif not settings['auto'].get(kind, True):
         return
     tpl = settings['templates'].get(kind, '')
     if not tpl.strip():
@@ -793,12 +1280,33 @@ def expire_overdue():
             return
         for rid in ids:
             db().execute("UPDATE reservations SET status='cancelled', cancel_reason='입금기한 초과 자동취소', "
-                         "updated_at=? WHERE id=?", (now_str(), rid))
+                         "cancel_by='auto', cancelled_at=?, updated_at=? WHERE id=?", (now_str(), now_str(), rid))
         db().commit()
         rows = [get_reservation(rid) for rid in ids]
     for group in _by_group(rows):
         if group[0]['phone']:
             notify('expired', group)
+            check_auto_block(group[0]['phone'])
+        notify('admin_expired', group)
+
+
+def send_deposit_reminders():
+    settings = load_settings()
+    minutes = settings.get('depositReminderMinutes') or 0
+    if not minutes:
+        return
+    soon = (datetime.now() + timedelta(minutes=minutes)).strftime('%Y-%m-%d %H:%M:%S')
+    with _lock:
+        rows = [row_dict(r) for r in db().execute(
+            "SELECT * FROM reservations WHERE status='pending' AND deposit_reminded=0 AND deadline IS NOT NULL "
+            "AND deadline <= ? AND deadline > ? AND created_at <= ?",
+            (soon, now_str(), (datetime.now() - timedelta(minutes=minutes)).strftime('%Y-%m-%d %H:%M:%S'))).fetchall()]
+        for r in rows:
+            db().execute('UPDATE reservations SET deposit_reminded=1 WHERE id=?', (r['id'],))
+        db().commit()
+    for group in _by_group(rows):
+        if group[0]['phone']:
+            notify('deposit_reminder', group)
 
 
 def send_reminders():
@@ -836,6 +1344,7 @@ def _worker():
     while True:
         try:
             expire_overdue()
+            send_deposit_reminders()
             send_reminders()
             daily_backup()
         except Exception as e:
@@ -914,16 +1423,17 @@ EXPORT_COLS = [('예약번호', 'code'), ('상태', 'status_label'), ('경로', 
                ('입실', 'checkin'), ('퇴실', 'checkout'), ('박', 'nights'), ('인원', 'guests'),
                ('예약자', 'name'), ('연락처', 'phone_fmt'), ('객실요금', 'room_amount'), ('인원추가', 'extra_amount'),
                ('옵션', 'option_text'), ('옵션요금', 'option_amount'), ('총액', 'total'), ('입금액', 'paid'),
-               ('환불액', 'refund'), ('요청사항', 'request'), ('메모', 'memo'), ('취소사유', 'cancel_reason'),
+               ('환불액', 'refund'), ('결제구분', 'pay_method'), ('취소구분', 'cancel_by_label'),
+               ('환불상태', 'refund_label'), ('환불계좌', 'refund_info'), ('요청사항', 'request'), ('메모', 'memo'), ('취소사유', 'cancel_reason'),
                ('접수일시', 'created_at')]
-EXPORT_WIDTHS = (16, 9, 9, 13, 11, 11, 5, 5, 10, 14, 10, 9, 26, 9, 10, 10, 9, 30, 30, 20, 19)
+EXPORT_WIDTHS = (16, 9, 9, 13, 11, 11, 5, 5, 10, 14, 10, 9, 26, 9, 10, 10, 9, 9, 11, 9, 28, 30, 30, 20, 19)
 MONEY_COLS = {'room_amount', 'extra_amount', 'option_amount', 'total', 'paid', 'refund'}
 
 
-def export(start, end):
+def export(start, end, **filters):
     """엑셀(.xlsx) 파일 내용 반환. openpyxl 이 없으면 CSV"""
     names = {r['id']: r['name'] for r in load_prices()['rooms']}
-    rows = list_reservations(start, end)
+    rows = list_reservations(start, end, **filters)
     for r in rows:
         r['room_name'] = names.get(r['room_id'], r['room_id'])
         r['option_text'] = ', '.join(f"{o['name']}({o.get('detail', '')}) x{o['qty']}" for o in r['options'])
@@ -957,6 +1467,295 @@ def export(start, end):
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx'
+
+
+# ──────────────────────────────────────────────
+#  고객관리 (땡큐캠핑 캠퍼관리)
+# ──────────────────────────────────────────────
+BLOCK_CATEGORY = '예약불가'
+
+
+def is_blocked_customer(phone):
+    with _lock:
+        r = db().execute('SELECT category, deleted FROM customers WHERE phone=?', (norm_phone(phone),)).fetchone()
+    return bool(r and r['category'] == BLOCK_CATEGORY and not r['deleted'])
+
+
+def _customer_stats():
+    """전화번호별 누적 예약 건수 · 금액 · 연속 취소 횟수"""
+    stats = {}
+    rows = db().execute("SELECT phone, group_code, status, total, paid, refund, created_at FROM reservations "
+                        "WHERE phone != '' AND status != 'block' ORDER BY created_at DESC").fetchall()
+    seen = {}
+    for r in rows:
+        st = stats.setdefault(r['phone'], {'count': 0, 'amount': 0, 'cancel_streak': 0, '_streak_open': True,
+                                           'last': ''})
+        st['last'] = st['last'] or r['created_at']
+        if r['status'] == 'confirmed':
+            st['count'] += 1
+            st['amount'] += r['total']
+        g = (r['phone'], r['group_code'])
+        if g in seen:
+            continue
+        seen[g] = True
+        if st['_streak_open']:  # 최근 예약부터 연속으로 취소된 횟수 (예약번호 단위)
+            if r['status'] == 'cancelled':
+                st['cancel_streak'] += 1
+            else:
+                st['_streak_open'] = False
+    for st in stats.values():
+        st.pop('_streak_open')
+    return stats
+
+
+def list_customers(view='all', q='', category=''):
+    sql, args = 'SELECT * FROM customers WHERE deleted=?', [1 if view == 'deleted' else 0]
+    if view == 'blocked':
+        sql += ' AND category=?'
+        args.append(BLOCK_CATEGORY)
+    if category:
+        sql += ' AND category=?'
+        args.append(category)
+    if q:
+        sql += ' AND (name LIKE ? OR nickname LIKE ? OR memo LIKE ?' + (' OR phone LIKE ?' if norm_phone(q) else '') + ')'
+        args += [f'%{q}%'] * 3 + ([f'%{norm_phone(q)}%'] if norm_phone(q) else [])
+    sql += ' ORDER BY created_at DESC LIMIT 5000'
+    with _lock:
+        rows = [dict(r) for r in db().execute(sql, args).fetchall()]
+        stats = _customer_stats()
+        counts = {
+            'all': db().execute('SELECT COUNT(*) FROM customers WHERE deleted=0').fetchone()[0],
+            'blocked': db().execute('SELECT COUNT(*) FROM customers WHERE deleted=0 AND category=?',
+                                    (BLOCK_CATEGORY,)).fetchone()[0],
+            'deleted': db().execute('SELECT COUNT(*) FROM customers WHERE deleted=1').fetchone()[0],
+        }
+    empty = {'count': 0, 'amount': 0, 'cancel_streak': 0, 'last': ''}
+    for r in rows:
+        r.update(stats.get(r['phone'], empty))
+        r['phone_fmt'] = fmt_phone(r['phone'])
+    return {'items': rows, 'counts': counts}
+
+
+def get_customer(phone):
+    phone = norm_phone(phone)
+    with _lock:
+        c = db().execute('SELECT * FROM customers WHERE phone=?', (phone,)).fetchone()
+        if not c:
+            raise BookingError('고객을 찾을 수 없습니다')
+        res = [row_dict(r) for r in db().execute(
+            'SELECT * FROM reservations WHERE phone=? ORDER BY checkin DESC', (phone,)).fetchall()]
+        c = dict(c)
+        c.update(_customer_stats().get(phone, {'count': 0, 'amount': 0, 'cancel_streak': 0, 'last': ''}))
+    c['phone_fmt'] = fmt_phone(phone)
+    return {'item': c, 'reservations': res}
+
+
+def save_customer(data):
+    """고객 등록(새 번호) 또는 수정"""
+    phone = norm_phone(data.get('phone'))
+    if not valid_mobile(phone):
+        raise BookingError('휴대폰 번호를 정확히 입력해 주세요')
+    fields = {k: str(data.get(k, '')).strip()[:200] for k in ('name', 'nickname', 'category', 'memo')}
+    with _lock:
+        db().execute('INSERT OR IGNORE INTO customers (phone, name, created_at) VALUES (?,?,?)',
+                     (phone, fields['name'], now_str()))
+        db().execute('UPDATE customers SET name=?, nickname=?, category=?, memo=?, deleted=0 WHERE phone=?',
+                     (fields['name'], fields['nickname'], fields['category'], fields['memo'], phone))
+        db().commit()
+    return get_customer(phone)
+
+
+def customers_action(phones, action, category=''):
+    """선택한 고객: 분류 이동 / 삭제 / 복구"""
+    phones = [norm_phone(p) for p in phones if norm_phone(p)]
+    with _lock:
+        for p in phones:
+            if action == 'category':
+                db().execute('UPDATE customers SET category=? WHERE phone=?', (category, p))
+            elif action == 'delete':
+                db().execute('UPDATE customers SET deleted=1 WHERE phone=?', (p,))
+            elif action == 'restore':
+                db().execute('UPDATE customers SET deleted=0 WHERE phone=?', (p,))
+            elif action == 'purge':  # 삭제고객에서 완전 삭제
+                db().execute('DELETE FROM customers WHERE phone=? AND deleted=1', (p,))
+        db().commit()
+    return len(phones)
+
+
+def import_customers(data, filename):
+    """땡큐캠핑 등에서 받은 엑셀(.xlsx) / CSV 파일에서 이름 · 휴대폰 가져오기"""
+    rows = []
+    if filename.lower().endswith('.xlsx'):
+        try:
+            from openpyxl import load_workbook
+        except ImportError:
+            raise BookingError('엑셀 파일을 읽을 수 없습니다. CSV 로 저장해서 올려 주세요')
+        wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+        rows = [['' if v is None else str(v) for v in r] for r in wb.active.iter_rows(values_only=True)]
+    else:
+        import csv
+        for enc in ('utf-8-sig', 'cp949'):
+            try:
+                rows = list(csv.reader(io.StringIO(data.decode(enc))))
+                break
+            except UnicodeDecodeError:
+                continue
+    # 머리글 줄에서 이름 · 휴대폰 칸 찾기
+    head_i = name_c = phone_c = nick_c = None
+    for i, r in enumerate(rows[:20]):
+        cells = [c.replace(' ', '') for c in r]
+        p = next((k for k, c in enumerate(cells) if c in ('휴대폰', '휴대폰번호', '연락처', '전화번호', '핸드폰')), None)
+        n = next((k for k, c in enumerate(cells) if c in ('고객명', '이름', '예약자', '예약자명', '성명')), None)
+        if p is not None:
+            head_i, phone_c, name_c = i, p, n
+            nick_c = next((k for k, c in enumerate(cells) if c == '닉네임'), None)
+            break
+    if head_i is None:
+        raise BookingError('파일 첫 줄에 "고객명", "휴대폰" 제목 칸이 있어야 합니다')
+    added = updated = skipped = 0
+    with _lock:
+        for r in rows[head_i + 1:]:
+            phone = norm_phone(r[phone_c] if phone_c < len(r) else '')
+            if not valid_mobile(phone):
+                skipped += 1
+                continue
+            name = (r[name_c] if name_c is not None and name_c < len(r) else '').strip()[:30]
+            nick = (r[nick_c] if nick_c is not None and nick_c < len(r) else '').strip()[:30]
+            cur = db().execute('INSERT OR IGNORE INTO customers (phone, name, nickname, created_at) VALUES (?,?,?,?)',
+                               (phone, name, nick, now_str()))
+            if cur.rowcount:
+                added += 1
+            else:
+                updated += 1
+                if name:
+                    db().execute("UPDATE customers SET name=CASE WHEN name='' THEN ? ELSE name END WHERE phone=?",
+                                 (name, phone))
+        db().commit()
+    return {'added': added, 'existing': updated, 'skipped': skipped}
+
+
+def customers_sms(phones, msg, category_all=None):
+    """고객 문자 발송 (선택 고객 또는 분류 전체). 순서대로 백그라운드 발송"""
+    msg = str(msg or '').strip()
+    if not msg:
+        raise BookingError('문자 내용을 입력하세요')
+    if category_all is not None:
+        with _lock:
+            sql = "SELECT phone FROM customers WHERE deleted=0 AND category != ?"
+            args = [BLOCK_CATEGORY]
+            if category_all:
+                sql += ' AND category=?'
+                args.append(category_all)
+            phones = [r['phone'] for r in db().execute(sql, args).fetchall()]
+    phones = sorted({norm_phone(p) for p in phones if valid_mobile(p)})
+
+    def run():
+        for p in phones:
+            send_sms(p, msg, 'customer')
+    threading.Thread(target=run, daemon=True).start()
+    return len(phones)
+
+
+# ──────────────────────────────────────────────
+#  매출관리 (땡큐캠핑 매출관리와 같은 기준: 퇴실일자 기준)
+# ──────────────────────────────────────────────
+def _sales_rows(start, end, basis='checkout', exclude_admin=False, pay_method=None):
+    """매출 대상 예약 (확정 + 위약금이 남은 취소). start~end(미포함) 기준일 범위"""
+    col = {'checkout': 'checkout', 'checkin': 'checkin'}.get(basis, 'checkout')
+    sql = (f"SELECT * FROM reservations WHERE status IN ('confirmed','cancelled') AND {col} >= ? AND {col} < ?")
+    args = [start, end]
+    if exclude_admin:
+        sql += " AND source = '홈페이지'"
+    if pay_method:
+        sql += ' AND pay_method = ?'
+        args.append(pay_method)
+    with _lock:
+        rows = [row_dict(r) for r in db().execute(sql, args).fetchall()]
+    for r in rows:
+        r['_day'] = r[col]
+    return rows
+
+
+def _sales_bucket(rows, key):
+    out = {}
+    for r in rows:
+        b = out.setdefault(key(r), {'count': 0, 'amount': 0, 'deduct_count': 0, 'deduct_amount': 0})
+        if r['status'] == 'confirmed':
+            b['count'] += 1
+            b['amount'] += r['total']
+        elif revenue_of(r) > 0:  # 취소됐지만 위약금(받은 돈 - 환불)이 남은 건
+            b['deduct_count'] += 1
+            b['deduct_amount'] += revenue_of(r)
+    for b in out.values():
+        b['total'] = b['amount'] + b['deduct_amount']
+    return out
+
+
+def sales_monthly(year, basis='checkout', exclude_admin=False, pay_method=None):
+    rows = _sales_rows(f'{year}-01-01', f'{year + 1}-01-01', basis, exclude_admin, pay_method)
+    b = _sales_bucket(rows, lambda r: int(r['_day'][5:7]))
+    empty = {'count': 0, 'amount': 0, 'deduct_count': 0, 'deduct_amount': 0, 'total': 0}
+    return [dict(empty, **b.get(m, {}), month=m) for m in range(1, 13)]
+
+
+def sales_daily(year, month, basis='checkout', exclude_admin=False, pay_method=None):
+    first = date(year, month, 1)
+    nxt = (first.replace(day=28) + timedelta(days=4)).replace(day=1)
+    rows = _sales_rows(first.isoformat(), nxt.isoformat(), basis, exclude_admin, pay_method)
+    b = _sales_bucket(rows, lambda r: r['_day'])
+    empty = {'count': 0, 'amount': 0, 'deduct_count': 0, 'deduct_amount': 0, 'total': 0}
+    out, d = [], first
+    while d < nxt:
+        out.append(dict(empty, **b.get(d.isoformat(), {}), date=d.isoformat()))
+        d += timedelta(days=1)
+    return out
+
+
+def money_calendar(month):
+    """예약정산달력: 날짜별 실제 입금 · 환불 금액"""
+    first = parse_date(str(month) + '-01', '월')
+    nxt = (first.replace(day=28) + timedelta(days=4)).replace(day=1)
+    days = {}
+    with _lock:
+        for r in db().execute("SELECT substr(paid_at,1,10) d, COUNT(*) n, SUM(paid) s FROM reservations "
+                              "WHERE paid > 0 AND paid_at >= ? AND paid_at < ? GROUP BY d",
+                              (first.isoformat(), nxt.isoformat())):
+            days.setdefault(r['d'], {})['paid'] = {'count': r['n'], 'amount': r['s']}
+        for r in db().execute("SELECT substr(refund_done_at,1,10) d, COUNT(*) n, SUM(refund) s FROM reservations "
+                              "WHERE refund_status='done' AND refund_done_at >= ? AND refund_done_at < ? GROUP BY d",
+                              (first.isoformat(), nxt.isoformat())):
+            days.setdefault(r['d'], {})['refund'] = {'count': r['n'], 'amount': r['s']}
+        due = db().execute("SELECT COUNT(*) n, COALESCE(SUM(refund),0) s FROM reservations "
+                           "WHERE refund_status='due'").fetchone()
+    return {'month': month, 'days': days, 'refundDue': {'count': due['n'], 'amount': due['s']}}
+
+
+def cost_report(year):
+    """비용 · 정산자료: 월별 매출 - 문자비 - 고정비 = 순매출 (+ 땡큐캠핑 수수료와 비교)"""
+    settings = load_settings()
+    months = sales_monthly(year)
+    sms = {m: {'sms': 0, 'lms': 0} for m in range(1, 13)}
+    with _lock:
+        for r in db().execute("SELECT created_at, msg FROM sms_log WHERE ok=1 AND phone != ? "
+                              "AND created_at >= ? AND created_at < ?",
+                              (TELEGRAM_LOG, f'{year}-01-01', f'{year + 1}-01-01')):
+            kind = 'lms' if len(r['msg'].encode('euc-kr', errors='replace')) > 90 else 'sms'
+            sms[int(r['created_at'][5:7])][kind] += 1
+    fixed = int(settings.get('monthlyFixedCost') or 0)
+    rate = float(settings.get('compareFeeRate') or 0)
+    out = []
+    for m in months:
+        c = sms[m['month']]
+        sms_cost = round(c['sms'] * float(settings.get('smsPrice') or 0) + c['lms'] * float(settings.get('lmsPrice') or 0))
+        has_data = m['total'] or c['sms'] or c['lms']
+        fixed_m = fixed if has_data else 0
+        out.append({'month': m['month'], 'count': m['count'] + m['deduct_count'], 'revenue': m['total'],
+                    'sms': c['sms'], 'lms': c['lms'], 'sms_cost': sms_cost, 'fixed': fixed_m,
+                    'net': m['total'] - sms_cost - fixed_m,
+                    'compare_fee': round(m['total'] * rate / 100),
+                    'saved': round(m['total'] * rate / 100) - sms_cost - fixed_m})
+    return {'year': year, 'months': out, 'rate': rate, 'smsPrice': settings.get('smsPrice'),
+            'lmsPrice': settings.get('lmsPrice'), 'fixed': fixed}
 
 
 # ──────────────────────────────────────────────
@@ -1017,6 +1816,10 @@ def handle_public(method, path, query, body, ip):
         if rate_limited('reserve:' + ip, 5, 3600):
             return 429, {'error': '예약 시도가 너무 많습니다. 전화로 문의해 주세요'}
         return 200, create_web_booking(body)
+    if method == 'POST' and path == '/api/public/cancel':
+        if rate_limited('lookup:' + ip, 20, 600):
+            return 429, {'error': '잠시 후 다시 시도해 주세요'}
+        return 200, customer_cancel(body.get('code'), body.get('phone'), body)
     if method == 'POST' and path == '/api/public/lookup':
         if rate_limited('lookup:' + ip, 20, 600):
             return 429, {'error': '잠시 후 다시 시도해 주세요'}
@@ -1024,13 +1827,38 @@ def handle_public(method, path, query, body, ip):
     return 404, {'error': '알 수 없는 요청'}
 
 
+def list_filters(q):
+    """목록 · 엑셀 공통 검색 조건 (주소의 ?from=&to=&status=... 를 해석)"""
+    split = lambda k: [x for x in q(k).split(',') if x] or None
+    return {'start': q('from') or None, 'end': q('to') or None, 'status': split('status'), 'q': q('q').strip(),
+            'basis': q('basis') or 'stay', 'room': q('room') or None, 'refund_status': split('refund'),
+            'cancel_by': q('cancel_by') or None}
+
+
 def handle_admin(method, path, query, body):
     """관리자용 API (로그인 필요). (상태코드, 응답) 또는 ('file', 내용, 형식, 파일명)"""
     q = lambda k, d='': query.get(k, [d])[0]
     if method == 'GET':
         if path == '/api/bk/reservations':
-            status = [s for s in q('status').split(',') if s]
-            return 200, {'items': list_reservations(q('from') or None, q('to') or None, status, q('q').strip())}
+            return 200, {'items': list_reservations(**list_filters(q))}
+        if path == '/api/bk/customers':
+            return 200, list_customers(q('view') or 'all', q('q').strip(), q('category'))
+        if path == '/api/bk/customer':
+            return 200, get_customer(q('phone'))
+        if path == '/api/bk/sales/monthly':
+            return 200, {'items': sales_monthly(int(q('year')), q('basis') or 'checkout', q('exclude') == '1',
+                                                q('pay') or None)}
+        if path == '/api/bk/sales/daily':
+            return 200, {'items': sales_daily(int(q('year')), int(q('month')), q('basis') or 'checkout',
+                                              q('exclude') == '1', q('pay') or None)}
+        if path == '/api/bk/sales/calendar':
+            return 200, money_calendar(q('month'))
+        if path == '/api/bk/sales/cost':
+            return 200, cost_report(int(q('year')))
+        if path == '/api/bk/monthly':
+            return 200, {'items': monthly_report(q('from'), q('to'), q('basis') or 'created')}
+        if path == '/api/bk/options':
+            return 200, options_calendar(q('month'))
         if path == '/api/bk/reservation':
             with _lock:
                 r = get_reservation(int(q('id', '0')))
@@ -1041,7 +1869,8 @@ def handle_admin(method, path, query, body):
         if path == '/api/bk/settings':
             prices = load_prices()
             return 200, {'settings': load_settings(), 'peakPeriods': prices.get('peakPeriods', []),
-                         'holidays': prices.get('holidays', []), 'sources': SOURCES,
+                         'holidays': prices.get('holidays', []), 'sources': SOURCES, 'payMethods': PAY_METHODS,
+                         'refundPolicy': refund_policy_text(load_settings()),
                          'rooms': [{'id': r['id'], 'name': r['name'], 'std': r['std'], 'max': r['max'],
                                     'group': r['group']} for r in prices['rooms']],
                          'options': [{'i': o['i'], 'name': o['name'], 'detail': o.get('detail', ''),
@@ -1050,6 +1879,8 @@ def handle_admin(method, path, query, body):
             return 200, {'items': sms_log()}
         if path == '/api/bk/sms/balance':
             return 200, sms_balance()
+        if path == '/api/bk/telegram/chat':
+            return 200, telegram_find_chat()
         if path == '/api/bk/myip':  # 알리고에 등록할 이 PC의 인터넷(공인) IP
             try:
                 with urllib.request.urlopen('https://api.ipify.org', timeout=8) as resp:
@@ -1057,7 +1888,8 @@ def handle_admin(method, path, query, body):
             except Exception:
                 raise BookingError('인터넷 IP를 확인할 수 없습니다')
         if path == '/api/bk/export':
-            data, ctype, ext = export(q('from') or None, q('to') or None)
+            f = list_filters(q)
+            data, ctype, ext = export(f.pop('start'), f.pop('end'), **f)
             return 'file', data, ctype, f'reservations_{q("from")}_{q("to")}.{ext}'
     if method == 'POST':
         if path == '/api/bk/quote':
@@ -1069,6 +1901,24 @@ def handle_admin(method, path, query, body):
             return 200, {'item': update_reservation(int(body.get('id', 0)), body)}
         if path == '/api/bk/status':
             return 200, {'items': set_status(int(body.get('id', 0)), body.get('status'), body)}
+        if path == '/api/bk/customer/save':
+            return 200, save_customer(body)
+        if path == '/api/bk/customers/action':
+            return 200, {'count': customers_action(body.get('phones') or [], body.get('action'), body.get('category', ''))}
+        if path == '/api/bk/customers/sms':
+            return 200, {'sent': customers_sms(body.get('phones') or [], body.get('msg'),
+                                                body.get('categoryAll') if body.get('all') else None)}
+        if path == '/api/bk/refund-done':
+            refund_done(body.get('ids') or [], body.get('done', True), body.get('sms', True))
+            return 200, {'ok': True}
+        if path == '/api/bk/block-range':
+            return 200, block_range(body.get('room') or '', body.get('start'), body.get('end'), body.get('reason'))
+        if path == '/api/bk/block-all':
+            return 200, {'made': block_all(body.get('date'), body.get('reason'))}
+        if path == '/api/bk/sms/bulk':
+            if not body.get('kind') and not str(body.get('msg', '')).strip():
+                raise BookingError('문자 내용을 입력하세요')
+            return 200, {'sent': bulk_sms(body.get('ids') or [], body.get('kind'), str(body.get('msg', '')))}
         if path == '/api/bk/delete':
             delete_reservation(int(body.get('id', 0)))
             return 200, {'ok': True}
@@ -1083,6 +1933,9 @@ def handle_admin(method, path, query, body):
                 raise BookingError('문자 내용을 입력하세요')
             ok, result = send_sms(body.get('phone'), msg, 'manual', body.get('reservation_id'))
             return (200 if ok else 400), ({'ok': True, 'result': result} if ok else {'error': result})
+        if path == '/api/bk/telegram/test':
+            ok, result = send_telegram('✅ 동해카라반펜션 예약 알림이 연결되었습니다.\n새 예약 · 손님 취소 · 미입금 자동취소를 여기로 알려드립니다.', 'test')
+            return (200, {'ok': True}) if ok else (400, {'error': result})
         if path == '/api/bk/sms/preview':
             with _lock:
                 r = get_reservation(int(body.get('id', 0)))

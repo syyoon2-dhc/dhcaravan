@@ -228,6 +228,24 @@ class Handler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         query = parse_qs(parsed.query)
 
+        # ---------- 고객 명단 파일 가져오기 (엑셀/CSV 원본 그대로 받음) ----------
+        if parsed.path == '/api/bk/customers/import':
+            if not self._authed():
+                return self._json(401, {'error': '로그인이 필요합니다'})
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+            except ValueError:
+                length = 0
+            if length <= 0 or length > MAX_PHOTO:
+                return self._json(400, {'error': '파일이 비어 있거나 너무 큽니다'})
+            try:
+                result = booking.import_customers(self.rfile.read(length), query.get('name', [''])[0])
+            except booking.BookingError as e:
+                return self._json(400, {'error': str(e)})
+            except Exception as e:  # 손상된 파일 등
+                return self._json(400, {'error': f'파일을 읽을 수 없습니다 ({e})'})
+            return self._json(200, result)
+
         # ---------- 예약 API (손님용 / 관리자용) ----------
         if parsed.path.startswith(('/api/public/', '/api/bk/')):
             body = self._read_body()
