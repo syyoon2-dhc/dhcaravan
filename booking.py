@@ -54,7 +54,7 @@ DEFAULT_SETTINGS = {
     'depositReminderMinutes': 60,  # 입금 마감 N분 전 안내 문자
     'twoNight': {'enabled': True, 'weekdays': [4, 5], 'releaseDays': 7},  # 금(4)·토(5) 입실은 2박, 입실 7일 전부터 1박 허용
     'optionLimits': {},            # 옵션별 하루 최대 수량 {"1": 3} (옵션 번호: 수량)
-    'specialPrices': [],           # 임시요금 [{room: 'gureum' 또는 '' (전체), start, end, weekday, weekend, note}]
+    'specialPrices': [],           # 임시요금 [{rooms: ['gureum', ...] 또는 [] (전체), start, end, days: all|weekend|weekday, weekday, weekend, note}]
     'autoBlockCancels': 3,         # 연속 N회 취소한 고객은 자동으로 '예약불가' (0 = 사용 안 함)
     'refundNote': '환불은 취소 후 영업일 기준 3일 이내 입력하신 계좌로 입금됩니다.\n'
                   '천재지변 등 불가항력 시 별도 협의합니다.',
@@ -247,9 +247,15 @@ def save_settings(data):
         st, en = parse_date(sp.get('start'), '임시요금 시작일'), parse_date(sp.get('end'), '임시요금 종료일')
         if en < st:
             raise BookingError('임시요금 종료일이 시작일보다 빠릅니다')
-        specials.append({'room': sp.get('room') or '', 'start': st.isoformat(), 'end': en.isoformat(),
-                         'weekday': int(sp.get('weekday') or 0), 'weekend': int(sp.get('weekend') or 0),
-                         'note': str(sp.get('note', ''))[:50]})
+        days = sp.get('days') if sp.get('days') in ('weekend', 'weekday') else 'all'
+        rooms = sp.get('rooms') if isinstance(sp.get('rooms'), list) else ([sp['room']] if sp.get('room') else [])
+        item = {'rooms': sorted({str(r) for r in rooms if r}), 'start': st.isoformat(), 'end': en.isoformat(), 'days': days,
+                'weekday': int(sp.get('weekday') or 0) if days != 'weekend' else 0,
+                'weekend': int(sp.get('weekend') or 0) if days != 'weekday' else 0,
+                'note': str(sp.get('note', ''))[:50]}
+        if (days != 'weekend' and item['weekday'] <= 0) or (days != 'weekday' and item['weekend'] <= 0):
+            raise BookingError('임시요금의 요금을 입력하세요')
+        specials.append(item)
     s['specialPrices'] = sorted(specials, key=lambda x: x['start'])
     os.makedirs(PRIVATE_DIR, exist_ok=True)
     with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
@@ -323,7 +329,11 @@ def night_price(prices, room, d, specials=()):
     peak, weekend = day_info(prices, d)
     ds = d.isoformat()
     for sp in specials:  # 임시요금 (나중에 등록한 것보다 기간이 겹치면 먼저 등록된 것 우선)
-        if sp['room'] in ('', room['id']) and sp['start'] <= ds <= sp['end']:
+        days = sp.get('days', 'all')  # 주말만 · 평일만이면 나머지 요일은 기본 요금
+        if (days == 'weekend' and not weekend) or (days == 'weekday' and weekend):
+            continue
+        rooms = sp.get('rooms') if 'rooms' in sp else ([sp['room']] if sp.get('room') else [])  # 예전 형식(room 하나)도 지원
+        if (not rooms or room['id'] in rooms) and sp['start'] <= ds <= sp['end']:
             return sp['weekend' if weekend else 'weekday'], peak, weekend
     return room['price']['peak' if peak else 'normal'][1 if weekend else 0], peak, weekend
 

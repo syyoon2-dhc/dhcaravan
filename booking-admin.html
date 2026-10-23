@@ -391,6 +391,8 @@
   <section id="tab-special" hidden>
     <div class="card">
       <h2>💲 임시요금관리 <small>— 기간을 정해 요금을 바꿉니다 (할인 · 이벤트 등). 기간 안에서는 기본 요금 대신 이 요금이 적용됩니다.</small></h2>
+      <p class="hint" style="margin-bottom:8px">· <b>적용 요일</b>을 "주말만"으로 하면 기간 안의 주말에만 이 요금이 적용되고, 평일은 기본 요금 그대로입니다 ("평일만"은 반대).<br>
+        · 주말 = 주말 요금이 적용되는 날 (토요일 · 공휴일 전날 · 성수기 금요일). 비수기 금요일은 평일입니다.</p>
       <div class="tbl-wrap"><table class="list" id="sp-table"></table></div>
       <div class="row" style="margin-top:10px"><button class="btn gray" id="sp-add">＋ 임시요금 추가</button><button class="btn" id="sp-save">💾 저장</button></div>
       <p class="hint" style="margin-top:8px">· 주말 = 토요일 · 공휴일 전날 · 성수기 금요일 (기본 요금과 같은 기준)<br>· 기간이 겹치면 위쪽(시작일이 빠른) 요금이 먼저 적용됩니다. 기본 요금은 [사진·요금 관리]에서 바꿉니다.</p>
@@ -1484,26 +1486,38 @@ let specials = [];
 async function loadSpecial() {
   await loadMeta();
   specials = JSON.parse(JSON.stringify(META.settings.specialPrices || []));
+  specials.forEach(sp => { if (!sp.rooms) sp.rooms = sp.room ? [sp.room] : []; delete sp.room; });
   renderSpecial();
 }
 function renderSpecial() {
-  const roomSel = v => `<option value="">전체 객실</option>` + META.rooms.map(r => `<option value="${r.id}" ${r.id === v ? 'selected' : ''}>${esc(r.name)}</option>`).join('');
-  $('sp-table').innerHTML = `<thead><tr><th>번호</th><th>객실</th><th>시작일</th><th>종료일</th><th>평일 1박</th><th>주말 1박</th><th>메모</th><th>상태</th><th>관리</th></tr></thead><tbody>` +
+  // 객실 여러 개를 한 번에 고름 (아무것도 안 고르면 = 전체 객실)
+  const roomSel = v => `<label class="chk"><input type="checkbox" data-room="" ${v.length ? '' : 'checked'}> <b>전체 객실</b></label>` +
+    META.rooms.map(r => `<label class="chk"><input type="checkbox" data-room="${r.id}" ${v.includes(r.id) ? 'checked' : ''}> ${esc(r.name)}</label>`).join('');
+  $('sp-table').innerHTML = `<thead><tr><th>번호</th><th>객실</th><th>시작일</th><th>종료일</th><th>적용 요일</th><th>평일 1박</th><th>주말 1박</th><th>메모</th><th>상태</th><th>관리</th></tr></thead><tbody>` +
     (specials.length ? specials.map((sp, i) => `<tr data-i="${i}">
-      <td>${i + 1}</td><td><select data-k="room">${roomSel(sp.room)}</select></td>
+      <td>${i + 1}</td><td><div style="display:flex;flex-direction:column;gap:2px;align-items:flex-start;min-width:130px">${roomSel(sp.rooms || [])}</div></td>
       <td><input type="date" data-k="start" value="${sp.start}"></td><td><input type="date" data-k="end" value="${sp.end}"></td>
-      <td><input type="number" data-k="weekday" value="${sp.weekday}" style="width:100px"></td><td><input type="number" data-k="weekend" value="${sp.weekend}" style="width:100px"></td>
+      <td><select data-k="days">${[['all', '매일'], ['weekend', '주말만'], ['weekday', '평일만']].map(([v, t]) => `<option value="${v}" ${v === (sp.days || 'all') ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
+      <td>${sp.days === 'weekend' ? '<span class="hint">기본 요금</span>' : `<input type="number" data-k="weekday" value="${sp.weekday || ''}" style="width:100px">`}</td>
+      <td>${sp.days === 'weekday' ? '<span class="hint">기본 요금</span>' : `<input type="number" data-k="weekend" value="${sp.weekend || ''}" style="width:100px">`}</td>
       <td><input data-k="note" value="${esc(sp.note || '')}" style="width:140px"></td>
       <td>${sp.end < TODAY ? '<span class="st done">지남</span>' : sp.start <= TODAY ? '<span class="st confirmed">적용 중</span>' : '<span class="st pending">예정</span>'}</td>
       <td><button class="btn red sm" data-del="${i}">삭제</button></td></tr>`).join('')
-      : '<tr><td colspan="9" class="empty-msg">등록된 임시요금이 없습니다</td></tr>') + '</tbody>';
+      : '<tr><td colspan="10" class="empty-msg">등록된 임시요금이 없습니다</td></tr>') + '</tbody>';
 }
 $('sp-table').addEventListener('input', e => { const tr = e.target.closest('tr[data-i]'); if (tr && e.target.dataset.k) specials[+tr.dataset.i][e.target.dataset.k] = e.target.value; });
-$('sp-table').addEventListener('change', e => { const tr = e.target.closest('tr[data-i]'); if (tr && e.target.dataset.k) specials[+tr.dataset.i][e.target.dataset.k] = e.target.value; });
+$('sp-table').addEventListener('change', e => {
+  const tr = e.target.closest('tr[data-i]');
+  if (tr && e.target.dataset.room !== undefined) {
+    const sp = specials[+tr.dataset.i];
+    sp.rooms = e.target.dataset.room === '' ? [] : [...tr.querySelectorAll('[data-room]:checked')].map(c => c.dataset.room).filter(Boolean);
+    return renderSpecial();
+  }
+  if (tr && e.target.dataset.k) { specials[+tr.dataset.i][e.target.dataset.k] = e.target.value; if (e.target.dataset.k === 'days') renderSpecial(); } });
 $('sp-table').addEventListener('click', e => { if (e.target.dataset.del !== undefined) { specials.splice(+e.target.dataset.del, 1); renderSpecial(); } });
-$('sp-add').onclick = () => { specials.push({ room: '', start: TODAY, end: addDays(TODAY, 30), weekday: '', weekend: '', note: '' }); renderSpecial(); };
+$('sp-add').onclick = () => { specials.push({ rooms: [], start: TODAY, end: addDays(TODAY, 30), days: 'all', weekday: '', weekend: '', note: '' }); renderSpecial(); };
 $('sp-save').onclick = async () => {
-  if (specials.some(sp => !sp.start || !sp.end || !+sp.weekday || !+sp.weekend)) return toast('기간과 평일 · 주말 요금을 모두 입력하세요');
+  if (specials.some(sp => !sp.start || !sp.end || (sp.days !== 'weekend' && !+sp.weekday) || (sp.days !== 'weekday' && !+sp.weekend))) return toast('기간과 요금을 모두 입력하세요');
   try { await api('/api/bk/settings', { specialPrices: specials }); toast('임시요금을 저장했습니다 — 바로 예약 요금에 반영됩니다'); loadSpecial(); } catch (e) { toast('⚠️ ' + e.message); }
 };
 
