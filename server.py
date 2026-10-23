@@ -127,10 +127,13 @@ class Handler(SimpleHTTPRequestHandler):
         return self.headers.get('X-Auth-Token', '') in TOKENS
 
     def _client_ip(self):
-        # Cloudflare Tunnel 을 거치면 실제 손님 IP 는 CF-Connecting-IP 헤더에 있음
+        # Cloudflare Tunnel / Tailscale Funnel 을 거치면 실제 손님 IP 는 헤더에 있음
         ip = self.client_address[0]
-        if ip in ('127.0.0.1', '::1') and self.headers.get('CF-Connecting-IP'):
-            return self.headers['CF-Connecting-IP']
+        if ip in ('127.0.0.1', '::1'):
+            if self.headers.get('CF-Connecting-IP'):
+                return self.headers['CF-Connecting-IP']
+            if self.headers.get('X-Forwarded-For'):
+                return self.headers['X-Forwarded-For'].split(',')[0].strip()
         return ip
 
     def _read_body(self):
