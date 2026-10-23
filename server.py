@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
-"""동해카라반펜션 홈페이지 서버 (사진/동영상 업로드 지원)
+"""동해카라반펜션 홈페이지 서버 (사진/동영상 업로드 + 예약관리)
 
 실행:  python server.py
-접속:  http://<PC IP>:8000          (홈페이지)
-       http://<PC IP>:8000/admin.html (사진 관리)
+접속:  http://<PC IP>:8000                    (홈페이지)
+       http://<PC IP>:8000/admin.html         (사진 관리)
+       http://<PC IP>:8000/booking-admin.html (예약 관리)
+       http://<PC IP>:8000/reserve.html       (손님 예약 페이지)
 """
 import glob
 import json
@@ -15,7 +17,9 @@ import subprocess
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-PORT = 8000
+import booking
+
+PORT = int(os.environ.get('DHC_PORT', 8000))
 TOKENS = set()  # 로그인 성공 시 발급되는 인증 토큰 (서버 재시작 시 초기화)
 
 # ──────────────────────────────────────────────
@@ -41,6 +45,11 @@ MAX_PHOTO = 20 * 1024 * 1024    # 20MB (브라우저에서 이미 압축돼서 �
 MAX_VIDEO = 500 * 1024 * 1024   # 500MB
 
 PHOTO_RE = re.compile(r'^\d+\.jpg$')
+
+# 인터넷에 공개해도 되는 파일만 허용 (admin_config.json, private/, .git 등은 차단)
+PUBLIC_FILES = {'/', '/index.html', '/admin.html', '/booking-admin.html', '/reserve.html',
+                '/robots.txt', '/sitemap.xml', '/favicon.ico'}
+PUBLIC_DIRS = ('/css/', '/js/', '/images/', '/data/')
 
 
 def find_ffmpeg():
@@ -102,6 +111,8 @@ class Handler(SimpleHTTPRequestHandler):
         # 객실 사진/영상과 API 는 항상 최신으로
         if self.path.startswith(('/images/rooms/', '/images/photos/', '/images/popup', '/data/', '/api/')):
             self.send_header('Cache-Control', 'no-store')
+        if self.path.startswith('/api/public/'):
+            self._cors()
         super().end_headers()
 
     def _json(self, code, obj):
@@ -114,6 +125,63 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _authed(self):
         return self.headers.get('X-Auth-Token', '') in TOKENS
+
+    def _client_ip(self):
+        # Cloudflare Tunnel 을 거치면 실제 손님 IP 는 CF-Connecting-IP 헤더에 있음
+        ip = self.client_address[0]
+        if ip in ('127.0.0.1', '::1') and self.headers.get('CF-Connecting-IP'):
+            return self.headers['CF-Connecting-IP']
+        return ip
+
+    def _read_body(self):
+        try:
+            length = int(self.headers.get('Content-Length', '0'))
+            if length > 1024 * 1024:
+                return None
+            return json.loads(self.rfile.read(length).decode('utf-8')) if length else {}
+        except (ValueError, json.JSONDecodeError):
+            return None
+
+    def _cors(self):
+        # GitHub Pages 홈페이지에서 예약 API 를 부를 수 있도록 허용
+        origin = self.headers.get('Origin', '')
+        if origin and origin in booking.load_settings().get('allowOrigins', []):
+            self.send_header('Access-Control-Allow-Origin', origin)
+            self.send_header('Vary', 'Origin')
+
+    def _booking(self, method, parsed, body):
+        """예약 API 처리. 처리했으면 True"""
+        path, query = parsed.path, parse_qs(parsed.query)
+        try:
+            if path.startswith('/api/public/'):
+                code, obj = booking.handle_public(method, path, query, body or {}, self._client_ip())
+                return self._json(code, obj) or True
+            if path.startswith('/api/bk/'):
+                if not self._authed():
+                    return self._json(401, {'error': '로그인이 필요합니다'}) or True
+                res = booking.handle_admin(method, path, query, body or {})
+                if res[0] == 'file':
+                    _, data, ctype, fname = res
+                    self.send_response(200)
+                    self.send_header('Content-Type', ctype)
+                    self.send_header('Content-Disposition', f'attachment; filename="{fname}"')
+                    self.send_header('Content-Length', str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return True
+                return self._json(*res) or True
+        except booking.BookingError as e:
+            return self._json(400, {'error': str(e)}) or True
+        except (KeyError, ValueError, TypeError) as e:
+            return self._json(400, {'error': f'잘못된 요청입니다 ({e})'}) or True
+        return False
+
+    def do_OPTIONS(self):
+        self.send_response(204)  # 허용 주소(Origin) 헤더는 end_headers 에서 붙임
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Max-Age', '86400')
+        self.end_headers()
 
     def _room_dir(self, query):
         room = query.get('room', [None])[0]
@@ -141,15 +209,37 @@ class Handler(SimpleHTTPRequestHandler):
                 'video': 'video.mp4' if os.path.exists(video) else None,
                 'videoSize': os.path.getsize(video) if os.path.exists(video) else 0,
             })
+        if parsed.path.startswith('/api/'):
+            if not self._booking('GET', parsed, None):
+                self._json(404, {'error': '알 수 없는 요청'})
+            return
+        if parsed.path not in PUBLIC_FILES and not parsed.path.startswith(PUBLIC_DIRS):
+            return self.send_error(404)
         return super().do_GET()
+
+    def do_HEAD(self):
+        parsed = urlparse(self.path)
+        if parsed.path not in PUBLIC_FILES and not parsed.path.startswith(PUBLIC_DIRS):
+            return self.send_error(404)
+        return super().do_HEAD()
 
     # ---------- 업로드 / 삭제 ----------
     def do_POST(self):
         parsed = urlparse(self.path)
         query = parse_qs(parsed.query)
 
+        # ---------- 예약 API (손님용 / 관리자용) ----------
+        if parsed.path.startswith(('/api/public/', '/api/bk/')):
+            body = self._read_body()
+            if body is None:
+                return self._json(400, {'error': '잘못된 요청'})
+            self._booking('POST', parsed, body)
+            return
+
         # ---------- 로그인 ----------
         if parsed.path == '/api/login':
+            if booking.rate_limited('login:' + self._client_ip(), 10, 600):
+                return self._json(429, {'error': '로그인 시도가 너무 많습니다. 10분 후 다시 시도하세요'})
             try:
                 length = int(self.headers.get('Content-Length', '0'))
                 body = json.loads(self.rfile.read(length).decode('utf-8'))
@@ -281,12 +371,14 @@ class Handler(SimpleHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         # 업로드/삭제만 콘솔에 표시
-        if '/api/' in (args[0] if args else ''):
+        if '/api/' in str(args[0] if args else ''):
             super().log_message(fmt, *args)
 
 
 if __name__ == '__main__':
+    booking.start_worker()  # 입금기한 초과 자동취소 · 입실 전날 안내문자
     server = ThreadingHTTPServer(('0.0.0.0', PORT), Handler)
     print(f'동해카라반펜션 서버 실행 중 → http://localhost:{PORT}')
     print(f'사진 관리 페이지 → http://localhost:{PORT}/admin.html')
+    print(f'예약 관리 페이지 → http://localhost:{PORT}/booking-admin.html')
     server.serve_forever()

@@ -1,2 +1,6 @@
 # 관리자 비밀번호 — 절대 인터넷(GitHub)에 올리지 않음
 admin_config.json
+
+# 예약 데이터(손님 개인정보) — 절대 인터넷(GitHub)에 올리지 않음
+private/
+__pycache__/
