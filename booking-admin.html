@@ -458,8 +458,18 @@
         <div class="f"><label>입금 계좌 (은행 · 계좌번호 · 예금주) — 비어 있으면 예약을 받지 않습니다</label><input id="s-bank" placeholder="농협 000-0000-0000-00 홍길동"></div>
         <div class="f"><label>문자용 짧은 계좌 (단문에 들어가게) — 비우면 위 계좌</label><input id="s-bank-short" placeholder="기업 15912505001013 윤석영"></div>
         <div class="f"><label>입금 기한 (예약 후 몇 시간)</label><input id="s-hours" type="number" min="1"></div>
-        <div class="f"><label>예약 오픈 마감일 (이 날 숙박까지) — 비우면 아래 일수 기준</label><input id="s-until" type="date"></div>
-        <div class="f"><label>오늘부터 며칠 뒤까지 예약 받기</label><input id="s-days" type="number" min="1"></div>
+        <div class="f full"><label>예약 오픈 방식</label>
+          <div class="row" style="flex-wrap:wrap;gap:6px 14px">
+            <label class="chk"><input type="radio" name="s-omode" value="month"> <b>월단위</b></label>
+            <label class="chk"><input type="radio" name="s-omode" value="days"> 오늘부터 며칠</label>
+            <label class="chk"><input type="radio" name="s-omode" value="date"> 마감일 지정</label>
+          </div>
+          <div class="row om om-month" style="flex-wrap:wrap;gap:6px;margin-top:8px">
+            예약가능 <select id="s-omonths"></select> 개월 · 매월 <select id="s-oday"></select> 일 <select id="s-ohour"></select> 시 오픈
+          </div>
+          <div class="row om om-days" style="margin-top:8px">오늘부터 <input id="s-days" type="number" min="1" style="width:90px"> 일 뒤 숙박까지</div>
+          <div class="row om om-date" style="margin-top:8px"><input id="s-until" type="date"> 숙박까지</div>
+          <p class="hint" id="s-open-preview" style="margin-top:6px"></p></div>
         <div class="f"><label>1회 최대 박수</label><input id="s-nights" type="number" min="1"></div>
         <div class="f"><label>1회 최대 객실 수</label><input id="s-rooms" type="number" min="1"></div>
         <div class="f"><label>펜션 대표 번호 (문자 문구 {펜션전화})</label><input id="s-phone"></div>
@@ -1535,6 +1545,11 @@ async function loadSettings(group) {
   $('r-optlimits').innerHTML = META.options.map(o => `<div class="f"><label>${esc(o.name)} ${esc(o.detail)}</label><input type="number" min="0" data-optlimit="${o.i}" value="${(s.optionLimits || {})[o.i] || ''}" placeholder="제한 없음"></div>`).join('');
   $('s-open').checked = !!s.bookingOpen; $('s-bank').value = s.bank; $('s-bank-short').value = s.bankShort || ''; $('s-hours').value = s.depositHours;
   $('s-until').value = s.openUntil || ''; $('s-days').value = s.maxDaysAhead; $('s-nights').value = s.maxNights;
+  const opts = (n, from, v, unit = '') => Array.from({ length: n }, (_, i) => i + from).map(x => `<option value="${x}" ${x === v ? 'selected' : ''}>${x}${unit}</option>`).join('');
+  $('s-omonths').innerHTML = opts(12, 1, s.openMonths || 2); $('s-oday').innerHTML = opts(28, 1, s.openDay || 1); $('s-ohour').innerHTML = opts(24, 0, s.openHour ?? 9);
+  const omode = s.openMode || (s.openUntil ? 'date' : 'days');
+  document.querySelectorAll('[name=s-omode]').forEach(r => { r.checked = r.value === omode; });
+  syncOpenMode();
   $('s-rooms').value = s.maxRooms; $('s-phone').value = s.phone;
   $('s-units').innerHTML = META.rooms.map(r => `<div class="f"><label>${esc(r.name)}</label><input type="number" min="1" data-unit="${r.id}" value="${unitsOf(r.id)}"></div>`).join('');
   $('s-rules').innerHTML = ''; (s.refundRules || []).forEach(addRuleRow);
@@ -1591,6 +1606,25 @@ $('s-save-rules').onclick = async () => {
   const peaks = [...document.querySelectorAll('.peak-row')].map(d => ({ start: d.querySelector('.pk-s').value, end: d.querySelector('.pk-e').value })).filter(p => p.start || p.end);
   try { await api('/api/bk/calendar-rules', { peakPeriods: peaks, holidays: $('s-hol').value.split(/\s+/).filter(Boolean) }); toast('성수기 · 공휴일을 저장했습니다'); await loadMeta(); } catch (e) { toast('⚠️ ' + e.message); }
 };
+/* 예약 오픈 방식 — 고른 방식의 입력칸만 보이고, 지금 기준으로 언제까지 열리는지 미리 보여줌 (서버 계산과 같은 규칙) */
+function syncOpenMode() {
+  const mode = document.querySelector('[name=s-omode]:checked')?.value || 'days';
+  document.querySelectorAll('.om').forEach(el => { el.hidden = !el.classList.contains('om-' + mode); });
+  const monthEnd = (y, m) => iso(new Date(y, m, 0));  // m = 1~ (13 이상이면 다음 해)
+  let text = '';
+  if (mode === 'month') {
+    const months = +$('s-omonths').value, day = +$('s-oday').value, hour = +$('s-ohour').value, now = new Date();
+    const openThis = new Date(now.getFullYear(), now.getMonth(), day, hour);
+    const passed = now >= openThis, until = monthEnd(now.getFullYear(), now.getMonth() + 1 + months - (passed ? 0 : 1));
+    const nxt = passed ? new Date(now.getFullYear(), now.getMonth() + 1, day, hour) : openThis;
+    const nxtUntil = parse(monthEnd(nxt.getFullYear(), nxt.getMonth() + 1 + months));
+    text = `지금 기준: <b>${fmt(until)}</b> 숙박까지 예약 가능 · 다음 오픈 <b>${fmt(iso(nxt))} ${hour}시</b> → ${nxtUntil.getMonth() + 1}월 말까지 열림`;
+  } else if (mode === 'days') text = `지금 기준: <b>${fmt(addDays(TODAY, +$('s-days').value || 0))}</b> 숙박까지 예약 가능 (매일 하루씩 늘어남)`;
+  else text = $('s-until').value ? `<b>${fmt($('s-until').value)}</b> 숙박까지 예약 가능` : '마감일을 입력하세요';
+  $('s-open-preview').innerHTML = text;
+}
+document.querySelectorAll('[name=s-omode]').forEach(r => r.onchange = syncOpenMode);
+['s-omonths', 's-oday', 's-ohour', 's-days', 's-until'].forEach(id => $(id).addEventListener('input', syncOpenMode));
 $('s-save').onclick = async () => {
   const units = {}; document.querySelectorAll('[data-unit]').forEach(i => { units[i.dataset.unit] = +i.value || 1; });
   const templates = {}; document.querySelectorAll('[data-tpl]').forEach(t => { templates[t.dataset.tpl] = t.value; });
@@ -1599,6 +1633,7 @@ $('s-save').onclick = async () => {
   const body = {
     bookingOpen: $('s-open').checked, bank: $('s-bank').value.trim(), bankShort: $('s-bank-short').value.trim(), depositHours: $('s-hours').value,
     openUntil: $('s-until').value, maxDaysAhead: $('s-days').value, maxNights: $('s-nights').value, maxRooms: $('s-rooms').value,
+    openMode: document.querySelector('[name=s-omode]:checked')?.value || '', openMonths: +$('s-omonths').value, openDay: +$('s-oday').value, openHour: +$('s-ohour').value,
     phone: $('s-phone').value.trim(), units, notice: $('s-notice').value, refundRules, refundNote: $('s-refund-note').value,
     customerCancel: $('s-cust-cancel').checked, customerCategories: $('s-cats').value.split(',').map(s => s.trim()).filter(Boolean),
     adminPhone: $('s-admin-phone').value.trim(), adminNotify: $('s-admin-notify').checked, reminderHour: +$('s-remind').value,

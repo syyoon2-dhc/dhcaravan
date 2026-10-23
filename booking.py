@@ -41,6 +41,9 @@ DEFAULT_SETTINGS = {
     'depositHours': 3,             # 예약 후 입금 기한 (시간)
     'maxDaysAhead': 180,           # 며칠 뒤까지 예약 받을지
     'openUntil': '',               # 이 날짜 숙박까지만 예약 오픈 (비우면 maxDaysAhead 기준)
+    # 예약 오픈 방식: 'month' = 월단위 (땡큐캠핑과 같음) / 'date' = 마감일 지정 / 'days' = 오늘부터 며칠 / '' = 예전 방식
+    # 월단위 예) 2개월 · 매월 1일 9시 → 10/1 09:00 부터 12/31 숙박까지 열림 (그 전에는 11/30 까지)
+    'openMode': '', 'openMonths': 2, 'openDay': 1, 'openHour': 9,
     'maxNights': 6,                # 1회 최대 박수
     'maxRooms': 6,                 # 1회 최대 객실 수
     'phone': '010-4589-1415',      # 펜션 대표 번호 (문자 문구에 사용)
@@ -236,6 +239,12 @@ def save_settings(data):
     s['units'] = {k: max(1, int(v)) for k, v in (s.get('units') or {}).items() if str(v).strip()}
     if s.get('openUntil'):
         parse_date(s['openUntil'], '예약 오픈 마감일')
+    s['openMode'] = s.get('openMode') if s.get('openMode') in ('month', 'date', 'days') else ''
+    s['openMonths'] = min(12, max(1, int(s.get('openMonths') or 2)))
+    s['openDay'] = min(28, max(1, int(s.get('openDay') or 1)))
+    s['openHour'] = min(23, max(0, int(s.get('openHour') or 0)))
+    if s['openMode'] == 'date' and not s.get('openUntil'):
+        raise BookingError('예약 오픈 마감일을 입력하세요')
     rules = {}
     for r in s.get('refundRules') or []:
         try:
@@ -465,9 +474,41 @@ def is_available(settings, room_id, checkin, checkout, exclude_id=None):
     return all(counts.get(ci + timedelta(days=k), 0) < units for k in range((co - ci).days))
 
 
+def _month_end(y, m):
+    """y년 m월(13 이상이면 다음 해로 넘김)의 마지막 날"""
+    y, m = y + (m - 1) // 12, (m - 1) % 12 + 1
+    return (date(y, m, 28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+
+
+def month_open_info(settings, now=None):
+    """월단위 오픈: (지금 열려 있는 마지막 숙박일, 다음 오픈 시각, 다음 오픈 때 열리는 마지막 숙박일)"""
+    now = now or datetime.now()
+    months, day, hour = settings.get('openMonths') or 2, settings.get('openDay') or 1, settings.get('openHour') or 0
+    this_open = datetime(now.year, now.month, day, hour)
+    if now >= this_open:  # 이번 달 오픈 시각이 지남 → 이번 달 + N개월 말일까지
+        until = _month_end(now.year, now.month + months)
+        nxt_y, nxt_m = now.year + now.month // 12, now.month % 12 + 1
+        nxt = datetime(nxt_y, nxt_m, day, hour)
+    else:  # 아직 이번 달 오픈 전 → 이번 달 + (N-1)개월 말일까지
+        until = _month_end(now.year, now.month + months - 1)
+        nxt = this_open
+    return until, nxt, _month_end(until.year, until.month + 1)
+
+
+def next_open_text(settings):
+    """월단위 오픈일 때 다음 오픈 안내 (예: '11/1(일) 9시에 1월 예약이 열립니다')"""
+    if settings.get('openMode') != 'month':
+        return ''
+    _, nxt, nxt_until = month_open_info(settings)
+    return f'{fmt_day(nxt.date().isoformat())} {nxt.hour}시에 {nxt_until.month}월 예약이 열립니다'
+
+
 def open_until(settings):
     """예약을 받는 마지막 숙박일"""
-    if settings.get('openUntil'):
+    mode = settings.get('openMode') or ''
+    if mode == 'month':
+        return month_open_info(settings)[0]
+    if mode in ('date', '') and settings.get('openUntil'):
         try:
             return date.fromisoformat(settings['openUntil'])
         except ValueError:
@@ -1158,6 +1199,7 @@ def public_info():
         'open': bool(settings.get('bookingOpen')) and bool(settings.get('bank')),
         'phone': settings['phone'], 'depositHours': settings['depositHours'],
         'openUntil': open_until(settings).isoformat(), 'maxNights': settings['maxNights'],
+        'nextOpen': next_open_text(settings),
         'maxRooms': settings['maxRooms'], 'refundPolicy': refund_policy_text(settings),
         'customerCancel': bool(settings.get('customerCancel')),
         'notice': settings['notice'], 'today': date.today().isoformat(),

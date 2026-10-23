@@ -611,7 +611,7 @@ function showCancel(r) {
   $('book-loading').hidden = true;
   if (!INFO || !INFO.open) { $('book-closed').hidden = false; return; }
   $('book-form').hidden = false;
-  $('notice').innerHTML = `📅 <b>${fmt(INFO.openUntil)}</b> 숙박까지 예약할 수 있습니다 · 최대 ${INFO.maxNights}박 · 결제는 무통장입금 (예약 후 ${INFO.depositHours}시간 이내)`;
+  $('notice').innerHTML = `📅 <b>${fmt(INFO.openUntil)}</b> 숙박까지 예약할 수 있습니다 · 최대 ${INFO.maxNights}박 · 결제는 무통장입금 (예약 후 ${INFO.depositHours}시간 이내)${INFO.nextOpen ? `<br>🔓 ${esc(INFO.nextOpen)}` : ''}`;
   $('notice-text').textContent = INFO.notice;
   $('refund-text').textContent = INFO.refundPolicy;
   $('dep-hours').textContent = INFO.depositHours;
