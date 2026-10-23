@@ -627,7 +627,9 @@ def create_web_booking(data):
 
 
 def create_reservation(data):
-    """관리자가 직접 넣는 예약 (전화 · 현장 · 땡큐캠핑 이관 · 예약막음)"""
+    """관리자가 직접 넣는 예약 (전화 · 현장 · 땡큐캠핑 이관 · 예약막음)
+    data['extra_rooms'] = [{room_id, guests}] 이면 같은 날짜 · 같은 손님으로 객실 여러 개를 한 예약번호로 묶어 등록
+    (결제금액 · 입금액 · 옵션은 첫 객실 기준, 추가 객실은 자동 계산 요금)"""
     settings, prices = load_settings(), load_prices()
     status = data.get('status', 'confirmed')
     if status not in ('pending', 'confirmed', 'block'):
@@ -637,13 +639,25 @@ def create_reservation(data):
     source = data.get('source') if data.get('source') in SOURCES else '기타'
     pay_method = data.get('pay_method') if data.get('pay_method') in PAY_METHODS else '무통장'
 
+    extra_rooms = [x for x in (data.get('extra_rooms') or []) if isinstance(x, dict) and x.get('room_id')]
+    room_ids = [data.get('room_id')] + [x['room_id'] for x in extra_rooms]
+    if len(set(room_ids)) != len(room_ids):
+        raise BookingError('같은 객실이 중복 선택되었습니다')
+
+    def block_quote(room_id):
+        bq = quote(room_id, data.get('checkin'), data.get('checkout'), 1, [], prices)
+        bq.update(room_amount=0, extra_amount=0, option_amount=0, total=0, options=[], guests=0)
+        return bq
+
     if status == 'block':
-        q = quote(data.get('room_id'), data.get('checkin'), data.get('checkout'), 1, [], prices)
-        q.update(room_amount=0, extra_amount=0, option_amount=0, total=0, options=[], guests=0)
+        q = block_quote(data.get('room_id'))
+        extra_qs = [block_quote(x['room_id']) for x in extra_rooms]
         name, phone, source = name or '예약막음', '', '기타'
     else:
         q = quote(data.get('room_id'), data.get('checkin'), data.get('checkout'), data.get('guests'),
                   data.get('options'), prices)
+        extra_qs = [quote(x['room_id'], data.get('checkin'), data.get('checkout'),
+                          x.get('guests') or get_room(prices, x['room_id'])['std'], [], prices) for x in extra_rooms]
         if not name:
             raise BookingError('예약자 이름을 입력해 주세요')
         if phone and not valid_mobile(phone):
@@ -655,24 +669,31 @@ def create_reservation(data):
     else:
         paid = total if status == 'confirmed' else 0
 
+    plan = [(q, total, paid)] + [(eq, eq['total'], eq['total'] if status == 'confirmed' else 0) for eq in extra_qs]
     with _lock:
         expire_overdue()
-        if not data.get('force') and not is_available(settings, q['room_id'], q['checkin'], q['checkout']):
-            raise BookingError('해당 날짜에 이미 예약이 있습니다')
+        if not data.get('force'):
+            for pq, _, _ in plan:
+                if not is_available(settings, pq['room_id'], pq['checkin'], pq['checkout']):
+                    raise BookingError(f'{pq["room_name"]}: 해당 날짜에 이미 예약이 있습니다')
         deadline = deposit_deadline(settings, q['checkin'], data.get('depositHours')) if status == 'pending' else None
-        code = new_code()
-        rid = _insert(q, status, source, deadline, name, phone, str(data.get('request', '')).strip()[:500],
-                      str(data.get('memo', '')).strip()[:1000], total, paid, code, code, pay_method)
-        extra = {'no_sms': 1 if data.get('no_sms') else 0}
-        if paid and data.get('paid_date'):  # 통장에 실제로 입금된 날 (매출 · 입금 달력 기준)
-            extra['paid_at'] = parse_date(data['paid_date'], '입금일').isoformat() + now_str()[10:]
-        db().execute(f'UPDATE reservations SET {", ".join(k + "=?" for k in extra)} WHERE id=?', (*extra.values(), rid))
+        base = new_code()
+        request, memo = str(data.get('request', '')).strip()[:500], str(data.get('memo', '')).strip()[:1000]
+        ids = []
+        for k, (pq, ptotal, ppaid) in enumerate(plan):
+            code = base if len(plan) == 1 else f'{base}-{k + 1}'
+            rid = _insert(pq, status, source, deadline, name, phone, request, memo, ptotal, ppaid, code, base, pay_method)
+            extra = {'no_sms': 1 if data.get('no_sms') else 0}
+            if ppaid and data.get('paid_date'):  # 통장에 실제로 입금된 날 (매출 · 입금 달력 기준)
+                extra['paid_at'] = parse_date(data['paid_date'], '입금일').isoformat() + now_str()[10:]
+            db().execute(f'UPDATE reservations SET {", ".join(k + "=?" for k in extra)} WHERE id=?', (*extra.values(), rid))
+            ids.append(rid)
         db().commit()
-        r = get_reservation(rid)
+        rows = [get_reservation(i) for i in ids]
 
     if data.get('sms') and phone and status in ('pending', 'confirmed'):
-        notify('received' if status == 'pending' else 'confirmed', [r], force=True)
-    return r
+        notify('received' if status == 'pending' else 'confirmed', rows, force=True)
+    return rows[0]
 
 
 EDITABLE = ('room_id', 'checkin', 'checkout', 'guests', 'name', 'phone', 'request', 'memo', 'source',

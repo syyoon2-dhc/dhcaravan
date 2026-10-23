@@ -1308,6 +1308,8 @@ function openForm(r) {
         <option value="pending">입금대기 (입금 기한 후 자동 취소)</option>
         <option value="block">예약막음 (수리 · 개인 사용 등으로 판매 중지)</option></select></div>`}
       <div class="f full"><label>객실</label><select id="f-room">${roomOpts}</select></div>
+      ${edit ? '' : `<div class="f full"><label>같은 날짜로 함께 예약할 객실 <small class="hint">(선택 · 여러 객실을 한 예약번호로 묶어 등록)</small></label>
+        <div class="row" style="flex-wrap:wrap;gap:6px 16px">${META.rooms.map(x => `<label class="chk"><input type="checkbox" data-xroom="${x.id}"> ${esc(x.name)}<span class="nb"> <input type="number" data-xguests="${x.id}" min="1" max="${x.max}" value="${x.std}" style="width:52px" title="인원"> 명</span></label>`).join('')}</div></div>`}
       <div class="f"><label>입실일</label><input type="date" id="f-ci" value="${r.checkin || ''}"></div>
       <div class="f"><label>퇴실일</label><input type="date" id="f-co" value="${r.checkout || ''}"></div>
       <div class="f"><label>예약자 이름 <span class="bk-only">/ 막는 이유</span></label><input id="f-name" value="${esc(r.name || '')}"></div>
@@ -1317,7 +1319,7 @@ function openForm(r) {
       <div class="f nb"><label>결제구분</label><select id="f-pay">${META.payMethods.map(s => `<option ${s === (r.pay_method || '무통장') ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
       ${META.options.map(o => `<div class="f nb"><label>${esc(o.name)} ${esc(o.detail)} (${won(o.price)}원)</label><select data-opt="${o.i}">${[0, 1, 2, 3].map(n => `<option value="${n}" ${n === optQty(o.i) ? 'selected' : ''}>${n}개</option>`).join('')}</select></div>`).join('')}
       <div class="f full nb"><div class="money-box" id="f-quote">객실 · 날짜 · 인원을 입력하면 요금이 자동 계산됩니다.</div></div>
-      <div class="f nb"><label>결제금액 (할인 시 직접 수정)</label><input type="number" id="f-total" value="${edit ? r.total : ''}"></div>
+      <div class="f nb"><label>결제금액 (할인 시 직접 수정${edit ? '' : ' · 첫 객실'})</label><input type="number" id="f-total" value="${edit ? r.total : ''}"></div>
       <div class="f nb"><label>입금액</label><input type="number" id="f-paid" value="${edit ? r.paid : ''}" placeholder="${edit ? '' : '확정이면 비워도 결제금액으로 처리'}"></div>
       ${edit ? '' : `<div class="f nb paid-only"><label>입금일 (통장에 들어온 날)</label><input type="date" id="f-pdate" value="${TODAY}"></div>`}
       ${cancelled ? `<div class="f nb"><label>환불액</label><input type="number" id="f-refund" value="${r.refund}"></div>
@@ -1346,6 +1348,8 @@ function openForm(r) {
   if (edit) $('f-back').onclick = () => openDetail(r.id);
 
   let lastAuto = null;
+  const extraRooms = () => edit ? [] : [...box.querySelectorAll('[data-xroom]:checked')].map(c => ({ room_id: c.dataset.xroom, guests: +box.querySelector(`[data-xguests="${c.dataset.xroom}"]`).value || 1 }));
+  const syncExtra = () => box.querySelectorAll('[data-xroom]').forEach(c => { const main = c.dataset.xroom === $('f-room').value; c.disabled = main; if (main) c.checked = false; });
   const formOptions = () => [...box.querySelectorAll('[data-opt]')].map(s => ({ i: +s.dataset.opt, qty: +s.value })).filter(o => o.qty);
   const recalc = async () => {
     const room = META.rooms.find(x => x.id === $('f-room').value);
@@ -1357,10 +1361,18 @@ function openForm(r) {
         객실 ${won(q.room_amount)} + 인원추가 ${won(q.extra_amount)} + 옵션 ${won(q.option_amount)} = <b style="color:var(--ink)">${won(q.total)}원</b>`;
       if (!$('f-total').value || +$('f-total').value === lastAuto) $('f-total').value = q.total;
       lastAuto = q.total;
+      const extras = extraRooms();
+      if (extras.length) {
+        const qs = await Promise.all(extras.map(x => api('/api/bk/quote', { room_id: x.room_id, checkin: $('f-ci').value, checkout: $('f-co').value, guests: x.guests, options: [] })));
+        const sum = qs.reduce((a, x) => a + x.total, 0);
+        $('f-quote').innerHTML += `<br>＋ 함께 예약: ${qs.map(x => `${esc(x.room_name)} ${won(x.total)}원`).join(' · ')}
+          <br>전체 ${extras.length + 1}개 객실 합계 <b style="color:var(--ink)">${won((+$('f-total').value || 0) + sum)}원</b> <small class="hint">(결제금액 · 입금액 · 옵션은 첫 객실 기준, 함께 예약한 객실은 자동 요금 — 나중에 객실별로 수정 가능)</small>`;
+      }
       $('f-quote').dataset.q = JSON.stringify(q);
     } catch (e) { $('f-quote').innerHTML = `<span style="color:var(--red)">${esc(e.message)}</span>`; }
   };
   ['f-room', 'f-ci', 'f-co', 'f-guests'].forEach(id => $(id).addEventListener('change', recalc));
+  if (!edit) { $('f-room').addEventListener('change', syncExtra); syncExtra(); box.querySelectorAll('[data-xroom],[data-xguests]').forEach(el => el.addEventListener('change', recalc)); }
   box.querySelectorAll('[data-opt]').forEach(s => s.addEventListener('change', recalc));
   $('f-ci').addEventListener('change', () => { if (!$('f-co').value || $('f-co').value <= $('f-ci').value) $('f-co').value = addDays($('f-ci').value, 1); });
   if (edit) { lastAuto = r.total; $('f-total').value = r.total; }
@@ -1385,9 +1397,10 @@ function openForm(r) {
         toast('변경했습니다'); openDetail(r.id);
       } else {
         body.status = $('f-status').value; body.sms = body.status !== 'block' && !body.no_sms;
+        body.extra_rooms = extraRooms();
         if (body.status === 'confirmed') body.paid_date = $('f-pdate').value;
         await api('/api/bk/create', body);
-        toast('등록했습니다'); closeModal(); refresh();
+        toast(body.extra_rooms.length ? `객실 ${body.extra_rooms.length + 1}개를 등록했습니다` : '등록했습니다'); closeModal(); refresh();
       }
     } catch (e) {
       if (/이미/.test(e.message) && !force && confirm(e.message + '\n\n그래도 겹쳐서 저장할까요? (중복 예약이 됩니다)')) return $('f-save').onclick(null, true);
