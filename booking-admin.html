@@ -1126,8 +1126,8 @@ async function openCustomer(phone) {
 
 function openCustSms(phones, category, all) {
   box.innerHTML = `<button class="modal-x">✕</button><h3>✉️ ${all ? `전체발송 — ${esc(category || '전체 고객')}` : `선택 고객 ${phones.length}명에게 문자`}</h3>
-    <div class="ad-note">⚠️ 할인 · 이벤트 등 <b>광고 문자</b>는 법에 따라 맨 앞에 <b>(광고)</b>, 끝에 <b>무료수신거부 080-xxx-xxxx</b> (알리고에서 080 번호 신청)를 넣어야 하며, <b>밤 9시 ~ 아침 8시에는 보낼 수 없습니다</b>. 예약 안내 같은 정보성 문자는 해당 없음.</div>
-    <textarea id="cs-msg" rows="7" style="margin-top:10px">(광고) [동해카라반펜션]\n\n\n무료수신거부 080-</textarea>
+    <div class="ad-note">⚠️ <b>할인 · 이벤트 등 광고 문자는 보내면 안 됩니다</b> — 손님에게 광고 수신 동의를 받지 않았습니다 (정보통신망법 위반 시 과태료). 예약 · 이용 안내 같은 <b>정보성 문자만</b> 보내세요.</div>
+    <textarea id="cs-msg" rows="7" style="margin-top:10px">[동해카라반펜션]\n</textarea>
     <div class="row" style="margin-top:8px"><button class="btn" id="cs-go">보내기</button><span class="hint" id="cs-bytes"></span></div>`;
   modal.hidden = false;
   const upd = () => { $('cs-bytes').textContent = byteInfo($('cs-msg').value); }; upd();

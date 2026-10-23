@@ -120,6 +120,8 @@ CREATE TABLE IF NOT EXISTS reservations (
   refund_holder TEXT NOT NULL DEFAULT '',
   refund_done_at TEXT,
   deposit_reminded INTEGER NOT NULL DEFAULT 0,
+  agreed_at TEXT,
+  agree_ver TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -171,7 +173,11 @@ NEW_COLUMNS = {  # 예전 DB 파일에 없는 칸은 자동으로 추가
     'cancelled_at': 'TEXT', 'refund_status': "TEXT NOT NULL DEFAULT ''", 'refund_bank': "TEXT NOT NULL DEFAULT ''",
     'refund_account': "TEXT NOT NULL DEFAULT ''", 'refund_holder': "TEXT NOT NULL DEFAULT ''", 'refund_done_at': 'TEXT',
     'deposit_reminded': 'INTEGER NOT NULL DEFAULT 0',
+    'agreed_at': 'TEXT', 'agree_ver': "TEXT NOT NULL DEFAULT ''",
 }
+
+PRIVACY_VER = '2026-10-23'  # 예약 화면 동의 문구 · privacy.html 을 고치면 날짜도 바꾸기
+KEEP_YEARS = 5  # 전자상거래법: 계약 · 청약철회 · 대금결제 기록 5년 보관 후 파기
 
 
 def _migrate(conn):
@@ -581,6 +587,9 @@ def create_web_booking(data):
     quotes = [quote(it.get('room_id'), data.get('checkin'), data.get('checkout'), it.get('guests'),
                     it.get('options'), prices, settings['maxNights']) for it in items]
     request = str(data.get('request', '')).strip()[:500]
+    agree = data.get('agree') or {}
+    if not (isinstance(agree, dict) and all(agree.get(k) is True for k in ('notice', 'refund', 'privacy'))):
+        raise BookingError('필수 항목에 모두 동의해 주세요')
     check_two_night(settings, quotes[0]['checkin'], quotes[0]['checkout'])
 
     with _lock:
@@ -594,6 +603,8 @@ def create_web_booking(data):
         for k, q in enumerate(quotes):
             code = base if len(quotes) == 1 else f'{base}-{k + 1}'
             _insert(q, 'pending', '홈페이지', deadline, name, phone, request, '', q['total'], 0, code, base)
+        db().execute('UPDATE reservations SET agreed_at=?, agree_ver=? WHERE group_code=?',
+                     (now_str(), PRIVACY_VER, base))  # 개인정보 수집 · 이용 동의 기록
         db().commit()
         rows = group_rows(base)
 
@@ -1199,13 +1210,22 @@ def telegram_find_chat():
     raise BookingError('봇에게 온 메시지가 없습니다. 텔레그램에서 봇에게 아무 말이나 보낸 뒤 다시 눌러 주세요')
 
 
+def mask_name(name):
+    """홍길동 → 홍*동, 김철 → 김*"""
+    name = str(name or '')
+    if len(name) <= 1:
+        return name
+    return name[0] + '*' * max(1, len(name) - 2) + (name[-1] if len(name) > 2 else '')
+
+
 def admin_detail_text(kind, rows, settings):
-    """텔레그램용 자세한 알림 (길이 제한 없음)"""
+    """텔레그램용 알림. 텔레그램은 해외 서버라 손님 정보는 가려서 보냄
+    (이름 일부 · 전화 끝 4자리만 — 전체 정보는 관리자 화면에서 확인)"""
     names = {r['id']: r['name'] for r in load_prices()['rooms']}
     r = rows[0]
     title = {'admin': '🔔 새 예약 (입금대기)', 'admin_cancel': '↩️ 손님 직접 취소',
              'admin_expired': '⏰ 미입금 자동취소'}.get(kind, '알림')
-    lines = [title, f'{r["name"]} {fmt_phone(r["phone"])}', f'{fmt_day(r["checkin"])} ~ {fmt_day(r["checkout"])} ({r["nights"]}박)']
+    lines = [title, f'{mask_name(r["name"])} (끝번호 {r["phone"][-4:] or "-"})', f'{fmt_day(r["checkin"])} ~ {fmt_day(r["checkout"])} ({r["nights"]}박)']
     for x in rows:
         opts = ', '.join(f'{o["name"]} {o.get("detail", "")} x{o["qty"]}' for o in x['options'])
         lines.append(f'· {names.get(x["room_id"], x["room_id"])} {x["guests"]}명 {x["total"]:,}원' + (f' ({opts})' if opts else ''))
@@ -1214,9 +1234,9 @@ def admin_detail_text(kind, rows, settings):
         lines.append(f'입금기한 {fmt_deadline(r["deadline"])}')
     if kind == 'admin_cancel':
         refund = sum(x['refund'] for x in rows)
-        lines.append(f'환불할 금액 {refund:,}원' + (f' → {r["refund_info"]}' if refund and r.get('refund_info') else ''))
+        lines.append(f'환불할 금액 {refund:,}원' + (' (환불 계좌는 관리자 화면에서 확인)' if refund else ''))
     if r.get('request'):
-        lines.append(f'요청: {r["request"]}')
+        lines.append('요청사항 있음 (관리자 화면에서 확인)')
     lines.append(f'예약번호 {r["group_code"] or r["code"]}')
     return '\n'.join(lines)
 
@@ -1340,13 +1360,38 @@ def daily_backup(keep=60):
         os.remove(os.path.join(folder, old))
 
 
+def purge_old_personal_info():
+    """보관 기간(KEEP_YEARS)이 지난 예약의 개인정보 파기 — 하루 한 번
+    예약 기록은 매출 통계용으로 날짜 · 객실 · 금액만 남기고 이름 · 연락처 · 요청 · 메모 · 환불계좌를 지움"""
+    cut = (date.today() - timedelta(days=366 * KEEP_YEARS)).isoformat()
+    with _lock:
+        n = db().execute(
+            "UPDATE reservations SET name='(파기)', phone='', request='', memo='', refund_bank='', refund_account='', "
+            "refund_holder='', updated_at=? WHERE checkout < ? AND status != 'block' AND name != '(파기)'",
+            (now_str(), cut)).rowcount
+        db().execute('DELETE FROM sms_log WHERE created_at < ?', (cut,))
+        # 최근 보관 기간 안에 예약이 없는 고객 명단도 삭제
+        db().execute("DELETE FROM customers WHERE created_at < ? AND phone NOT IN "
+                     "(SELECT phone FROM reservations WHERE phone != '')", (cut,))
+        db().commit()
+    if n:
+        print(f'[개인정보 파기] {KEEP_YEARS}년 지난 예약 {n}건')
+
+
+_last_purge = None
+
+
 def _worker():
+    global _last_purge
     while True:
         try:
             expire_overdue()
             send_deposit_reminders()
             send_reminders()
             daily_backup()
+            if _last_purge != date.today():
+                purge_old_personal_info()
+                _last_purge = date.today()
         except Exception as e:
             print('[예약 자동처리 오류]', e)
         time.sleep(60)

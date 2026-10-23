@@ -194,7 +194,12 @@
         </div>
         <div class="policy">
           <label class="agree"><input type="checkbox" id="ag-privacy"> 개인정보 수집 · 이용에 동의합니다 (필수)</label>
-          <pre>수집 항목: 이름, 휴대폰 번호 / 목적: 예약 확인 및 안내 문자 발송 / 보유 기간: 이용일로부터 1년 후 파기</pre>
+          <pre>· 수집 항목: 이름, 휴대폰 번호, 요청사항 (취소 시 환불 계좌 · 예금주)
+· 이용 목적: 예약 접수 · 확인, 입금 · 이용 안내 문자 발송, 취소 · 환불 처리
+· 보유 기간: 이용일로부터 5년 (전자상거래법에 따른 계약 · 결제 기록 보관) 후 파기
+· 처리 위탁: 알리고(문자 발송), 오라클 클라우드(예약 정보 보관, 서버 위치 대한민국)
+· 동의를 거부할 수 있으며, 거부하시면 온라인 예약은 할 수 없습니다 (전화 예약 가능).</pre>
+          <p class="hint" style="margin-top:6px"><a href="privacy.html" target="_blank" rel="noopener"><b>개인정보 처리방침 전체 보기</b></a></p>
         </div>
         <p class="err" id="submit-err"></p>
       </div>
@@ -470,6 +475,7 @@ $('submit-btn').onclick = async () => {
   try {
     const r = await api('/api/public/reserve', {
       checkin: ci, checkout: co, name, phone, request: $('f-request').value, website: $('f-website').value, items: items(),
+      agree: { notice: true, refund: true, privacy: true },
     });
     showDone(r, name);
   } catch (e) {

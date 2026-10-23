@@ -47,7 +47,7 @@ MAX_VIDEO = 500 * 1024 * 1024   # 500MB
 PHOTO_RE = re.compile(r'^\d+\.jpg$')
 
 # 인터넷에 공개해도 되는 파일만 허용 (admin_config.json, private/, .git 등은 차단)
-PUBLIC_FILES = {'/', '/index.html', '/admin.html', '/booking-admin.html', '/reserve.html',
+PUBLIC_FILES = {'/', '/index.html', '/admin.html', '/booking-admin.html', '/reserve.html', '/privacy.html',
                 '/robots.txt', '/sitemap.xml', '/favicon.ico'}
 PUBLIC_DIRS = ('/css/', '/js/', '/images/', '/data/')
 
