@@ -94,6 +94,8 @@
   .mcal .dnum { font-weight:800; font-size:13.5px; display:flex; align-items:center; gap:5px; margin-bottom:3px; }
   .mcal .tag { font-size:10.5px; font-weight:700; padding:0 6px; border-radius:4px; background:#fde8d7; color:#b45309; }
   .mcal .tot { font-weight:700; margin-bottom:2px; }
+  .mcal button.tot { display:block; border:0; background:none; padding:1px 3px; font:inherit; font-weight:700; color:var(--ink); cursor:pointer; border-radius:4px; text-align:left; }
+  .mcal button.tot:hover { background:var(--sky); text-decoration:underline; }
   .mcal .cl { display:block; width:100%; text-align:left; border:0; background:none; padding:1px 3px; margin:1px 0; border-radius:4px; font-size:11.5px; line-height:1.45; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--ink); }
   .mcal .cl:hover { background:var(--sky); }
   .mcal .cl.free { color:var(--gray); }
@@ -746,11 +748,12 @@ async function loadCal() {
       });
       if (left) lines += `<button class="cl free ${past ? 'past' : ''}" ${past ? 'disabled' : `data-room="${room.id}" data-d="${ds}"`}>${esc(room.name)} <b>(${left}/${unitsOf(room.id)})</b></button>`;
     });
-    return `<div class="tot">• 전체 (${free}/${totalUnits})</div>${lines}` + (!past && free ? `<button class="blockall" data-d="${ds}" data-free="${free}">[전체예약불가]</button>` : '');
+    return `<button class="tot" data-day="${ds}" title="이 날 예약자 정보 보기 · 프린트">• 전체 (${free}/${totalUnits}) 🔍</button>${lines}` + (!past && free ? `<button class="blockall" data-d="${ds}" data-free="${free}">[전체예약불가]</button>` : '');
   });
 }
 $('c-month').onclick = async e => {
   const b = e.target.closest('button'); if (!b || b.disabled) return;
+  if (b.dataset.day) return openDay(b.dataset.day);
   if (b.dataset.id) return openDetail(+b.dataset.id);
   if (b.dataset.room) return openForm({ room_id: b.dataset.room, checkin: b.dataset.d, checkout: addDays(b.dataset.d, 1) });
   if (b.classList.contains('blockall')) {
@@ -759,6 +762,67 @@ $('c-month').onclick = async e => {
     try { const r = await api('/api/bk/block-all', { date: b.dataset.d, reason }); toast(`${r.made}개 객실을 막았습니다 (예약을 눌러 삭제하면 해제)`); loadCal(); } catch (err) { toast('⚠️ ' + err.message); }
   }
 };
+
+/* ---------- 날짜별 예약자정보 확인 (땡큐캠핑 '예약자정보 확인'과 같은 화면) ---------- */
+async function openDay(ds) {
+  let items;
+  try { items = (await api(`/api/bk/reservations?from=${ds}&to=${addDays(ds, 1)}&status=pending,confirmed,block`)).items; }
+  catch (e) { toast('⚠️ ' + e.message); return; }
+  const d = parse(ds), title = `${ds.replace(/-/g, '.')} (${WD[d.getDay()]})`;
+  box.innerHTML = `<button class="modal-x">✕</button>
+    <h3>📋 예약자정보 확인 <small class="hint">— 예약일자 ${title}</small></h3>
+    <div class="row" style="flex-wrap:wrap;gap:6px;margin-bottom:10px">
+      방막 <select id="dy-block"><option value="1">포함</option><option value="0">제외</option></select>
+      입실 <select id="dy-in"><option value="">전체</option><option value="in">이날 입실</option><option value="stay">연박 중 (전날부터)</option><option value="out">다음날 퇴실</option></select>
+      <input id="dy-q" placeholder="이름 · 연락처 검색" style="width:150px">
+      <span class="grow"></span>
+      <button class="btn line sm" id="dy-sms" type="button">✉️ 문자발송</button>
+      <button class="btn line sm" id="dy-print" type="button">🖨 프린트</button>
+    </div>
+    <div id="dy-body"></div>`;
+  modal.hidden = false;
+  const shown = () => {
+    const q = $('dy-q').value.trim().replace(/-/g, ''), inK = $('dy-in').value;
+    return items.filter(r => ($('dy-block').value === '1' || r.status !== 'block')
+      && (!inK || (inK === 'in' ? r.checkin === ds : inK === 'stay' ? r.checkin < ds : r.checkout === addDays(ds, 1)))
+      && (!q || r.name.includes(q) || (r.phone || '').includes(q)));
+  };
+  const render = () => {
+    const list = shown();
+    let n = 0;
+    const groups = META.rooms.map(room => ({ room, rows: list.filter(r => r.room_id === room.id) })).filter(g => g.rows.length);
+    const people = list.filter(r => r.status !== 'block').reduce((a, r) => a + r.guests, 0);
+    $('dy-body').innerHTML = `<p class="hint" style="margin-bottom:8px">예약 ${list.filter(r => r.status !== 'block').length}건 · ${people}명 · 이날 입실 ${list.filter(r => r.checkin === ds && r.status !== 'block').length}건 · 남은 객실 ${META.rooms.reduce((a, r) => a + unitsOf(r.id), 0) - new Set(items.map(r => r.id)).size}개</p>` +
+      (groups.length ? groups.map(g => `<div style="margin:12px 0 4px;font-weight:700">▪ 사이트 : ${esc(g.room.name)}</div>
+      <div class="tbl-wrap"><table class="list dy-table"><thead><tr><th>No</th><th>상태</th><th>이용자명</th><th>연락처</th><th>인원</th><th>옵션</th><th>예약일자</th><th>예약금액</th><th>입금</th><th>결제</th></tr></thead><tbody>` +
+        g.rows.map(r => `<tr class="click" data-id="${r.id}"><td>${++n}</td><td>${statusTag(r)}</td><td class="nw"><b>${esc(r.name)}</b></td>
+          <td class="nw">${r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone_fmt)}</a>` : '-'}</td><td>${r.status === 'block' ? '-' : r.guests + '명'}</td>
+          <td class="l"><small>${r.options.map(o => `${esc(o.name)}×${o.qty}`).join(', ') || '-'}</small></td>
+          <td class="nw">${fmt(r.checkin)}~${fmt(r.checkout)} <small class="hint">${r.nights}박</small></td>
+          <td class="num">${won(r.total)}</td><td class="num">${r.total - r.paid > 0 && r.status !== 'block' ? `<b style="color:var(--red)">${won(r.paid)}</b>` : won(r.paid)}</td><td class="nw"><small>${esc(r.pay_method)}</small></td></tr>` +
+          (r.memo || r.request ? `<tr data-id="${r.id}" class="click"><td colspan="10" class="l"><small>${r.memo ? `<b>관리메모 :</b> ${esc(r.memo)}` : ''}${r.memo && r.request ? ' &nbsp;·&nbsp; ' : ''}${r.request ? `<b>요청 :</b> ${esc(r.request)}` : ''}</small></td></tr>` : '')).join('') +
+        '</tbody></table></div>').join('') : '<p class="empty-msg">이 날 예약이 없습니다</p>');
+  };
+  ['dy-block', 'dy-in'].forEach(id => $(id).onchange = render);
+  $('dy-q').oninput = render;
+  $('dy-body').onclick = e => { if (e.target.closest('a')) return; const tr = e.target.closest('tr[data-id]'); if (tr) openDetail(+tr.dataset.id); };
+  $('dy-sms').onclick = () => {
+    const ids = shown().filter(r => r.status !== 'block' && r.phone).map(r => r.id);
+    if (!ids.length) return toast('문자 보낼 예약이 없습니다');
+    openBulkSms(ids);
+  };
+  $('dy-print').onclick = () => {
+    const w = window.open('', '_blank');
+    if (!w) return toast('팝업이 막혔습니다. 브라우저에서 팝업을 허용하세요');
+    w.document.write(`<!doctype html><meta charset="utf-8"><title>예약자정보 ${title}</title>
+      <style>body{font-family:'Malgun Gothic',sans-serif;font-size:12px;margin:16px}h2{text-align:center;text-decoration:underline}
+      table{width:100%;border-collapse:collapse;margin-bottom:6px}th,td{border:1px solid #999;padding:4px 5px;text-align:center}th{background:#eee}
+      td.l{text-align:left}a{color:inherit;text-decoration:none}.hint{color:#555}.st{border:1px solid #999;border-radius:3px;padding:0 4px}</style>
+      <h2>예약자정보 확인</h2><p><b>예약일자 : ${title}</b></p>${$('dy-body').innerHTML}`);
+    w.document.close(); w.focus(); w.print();
+  };
+  render();
+}
 
 function renderGrid(items, first, last) {
   const days = Math.round((parse(last) - parse(first)) / 86400000);
