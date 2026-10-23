@@ -57,6 +57,11 @@
   .day-rooms td.av { text-align:right; width:52px; font-size:12px; font-weight:700; color:var(--ok); }
   .day-rooms tr.off td { color:#b8c2ca; } .day-rooms tr.off td.av { color:var(--red); }
   .day-rooms .sale { font-size:11px; color:var(--red); margin-left:4px; }
+  .was { color:#9aa6b0; font-weight:500; font-size:.85em; margin-right:4px; }
+  .off-pct { display:inline-block; background:var(--red); color:#fff; font-size:10.5px; font-weight:800; border-radius:6px; padding:0 5px; margin-left:4px; vertical-align:1px; }
+  .sale-note { display:block; font-size:11.5px; color:var(--red); font-weight:600; }
+  .day.sale::before { content:'할인'; position:absolute; top:3px; left:4px; font-size:9px; color:#fff; background:var(--red); border-radius:4px; padding:0 3px; font-weight:700; }
+  .day.sale.closed::before { display:none; }
   .day.closed { background:transparent; cursor:default; } .day.closed .d { color:#c3ccd3 !important; } .day.closed .s { display:none; }
   .day.empty { visibility:hidden; }
   .day.in { background:#d6eaf7; }
@@ -315,13 +320,15 @@ function renderCalendar() {
     const sub = info.open ? (n ? `${n}실 가능` : '마감') : '';
     const low = n ? Math.min(...info.rooms.map(id => info.prices[id] || Infinity)) : 0;
     const price = low && isFinite(low) ? `<span class="p">${manwon(low)}~</span>` : '';
-    html += `<button class="${cls}" data-d="${ds}" ${closed ? 'disabled' : ''}><span class="d">${d.getDate()}</span><span class="s">${sub}</span>${price}</button>`;
+    const onSale = info.rooms.some(id => (info.sale || {})[id]);
+    html += `<button class="${cls}${onSale ? ' sale' : ''}" data-d="${ds}" ${closed ? 'disabled' : ''}><span class="d">${d.getDate()}</span><span class="s">${sub}</span>${price}</button>`;
   });
   box.innerHTML = html;
   const def = (ci && calData.days[ci]) ? ci : Object.keys(calData.days).find(ds => calData.days[ds].open && calData.days[ds].rooms.length);
   showDayRooms(def);
 }
 
+const offPct = (base, p) => `${Math.round((1 - p / base) * 100)}%↓`;
 const manwon = p => (p % 10000 ? (Math.floor(p / 1000) / 10).toFixed(1) : p / 10000) + '만';
 // 달력 아래: 고른(또는 손가락 · 마우스를 올린) 날짜의 객실별 1박 요금과 예약 가능 여부
 function showDayRooms(ds) {
@@ -330,9 +337,10 @@ function showDayRooms(ds) {
   const base = calData.roomList;
   panel.innerHTML = `<h4>🏕 ${fmt(ds)} 객실 · 1박 요금 <small style="color:var(--gray);font-weight:500">(기준인원 · ${info.peak ? '성수기' : '비수기'}${info.weekend ? ' 주말' : ' 평일'})</small></h4>
     <table>${base.map(r => {
-      const ok = info.rooms.includes(r.id);
-      return `<tr class="${ok ? '' : 'off'}"><td>${esc(r.name)} <small style="color:var(--gray)">기준 ${r.std}명 · 최대 ${r.max}명</small></td>
-        <td class="pr">${info.prices[r.id] ? won(info.prices[r.id]) + '원' : '-'}</td><td class="av">${ok ? '가능' : '마감'}</td></tr>`;
+      const ok = info.rooms.includes(r.id), sale = (info.sale || {})[r.id], p = info.prices[r.id];
+      return `<tr class="${ok ? '' : 'off'}"><td>${esc(r.name)} <small style="color:var(--gray)">기준 ${r.std}명 · 최대 ${r.max}명</small>
+          ${sale && sale.note ? `<span class="sale-note">🎉 ${esc(sale.note)}</span>` : ''}</td>
+        <td class="pr">${sale ? `<s class="was">${won(sale.base)}</s>` : ''}${p ? won(p) + '원' : '-'}${sale ? `<span class="off-pct">${offPct(sale.base, p)}</span>` : ''}</td><td class="av">${ok ? '가능' : '마감'}</td></tr>`;
     }).join('')}</table>`;
   panel.hidden = false;
 }
@@ -398,7 +406,7 @@ function renderRooms() {
           <h4>${esc(r.name)} <span class="badge">${esc(r.badge)}</span>
             ${r.available ? '<span class="badge okb">예약가능</span>' : '<span class="badge full">예약마감</span>'}</h4>
           <p class="room-meta">기준 ${r.std}인 · 최대 ${r.max}인 · ${esc(r.extra)}</p>
-          <p class="room-price">${won(r.room_amount)}원 <small>/ ${r.nights.length}박 (기준인원)</small></p>
+          <p class="room-price">${r.base_amount > r.room_amount ? `<s class="was">${won(r.base_amount)}원</s>` : ''}${won(r.room_amount)}원${r.base_amount > r.room_amount ? `<span class="off-pct">${offPct(r.base_amount, r.room_amount)} 할인</span>` : ''} <small>/ ${r.nights.length}박 (기준인원)</small></p>
           ${sel ? roomOptionsHtml(r, sel) : ''}
         </div>
         <div class="room-pick"><button class="pick-btn" ${r.available ? '' : 'disabled'}>${sel ? '✓ 선택됨' : (r.available ? '선택' : '마감')}</button></div>

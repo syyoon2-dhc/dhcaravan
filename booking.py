@@ -340,25 +340,33 @@ def day_info(prices, d):
     return peak, weekend
 
 
-def night_price(prices, room, d, specials=()):
-    peak, weekend = day_info(prices, d)
+def find_special(room, d, specials, weekend):
+    """그날 그 객실에 적용되는 임시요금 (없으면 None). 기간이 겹치면 먼저 등록된 것 우선"""
     ds = d.isoformat()
-    base = room['price']['peak' if peak else 'normal'][1 if weekend else 0]
-    for sp in specials:  # 임시요금 (나중에 등록한 것보다 기간이 겹치면 먼저 등록된 것 우선)
+    for sp in specials:
         days = sp.get('days', 'all')  # 주말만 · 평일만이면 나머지 요일은 기본 요금
         if (days == 'weekend' and not weekend) or (days == 'weekday' and weekend):
             continue
         rooms = sp.get('rooms') if 'rooms' in sp else ([sp['room']] if sp.get('room') else [])  # 예전 형식(room 하나)도 지원
         if (not rooms or room['id'] in rooms) and sp['start'] <= ds <= sp['end']:
-            mode = sp.get('mode', 'fixed')
-            if mode == 'weekday':  # 주말에도 그 객실의 평일 요금 (객실마다 다른 요금 그대로)
-                return room['price']['peak' if peak else 'normal'][0], peak, weekend
-            if mode == 'minus':
-                return max(0, base - sp['amount']), peak, weekend
-            if mode == 'percent':
-                return base * (100 - sp['amount']) // 100 // 10 * 10, peak, weekend  # 10원 단위 버림
-            return sp['weekend' if weekend else 'weekday'], peak, weekend
-    return base, peak, weekend
+            return sp
+    return None
+
+
+def night_price(prices, room, d, specials=()):
+    peak, weekend = day_info(prices, d)
+    base = room['price']['peak' if peak else 'normal'][1 if weekend else 0]
+    sp = find_special(room, d, specials, weekend)  # 임시요금
+    if not sp:
+        return base, peak, weekend
+    mode = sp.get('mode', 'fixed')
+    if mode == 'weekday':  # 주말에도 그 객실의 평일 요금 (객실마다 다른 요금 그대로)
+        return room['price']['peak' if peak else 'normal'][0], peak, weekend
+    if mode == 'minus':
+        return max(0, base - sp['amount']), peak, weekend
+    if mode == 'percent':
+        return base * (100 - sp['amount']) // 100 // 10 * 10, peak, weekend  # 10원 단위 버림
+    return sp['weekend' if weekend else 'weekday'], peak, weekend
 
 
 def get_room(prices, room_id):
@@ -1111,6 +1119,11 @@ def month_calendar(month):
                       if open_day and counts[r['id']].get(d, 0) < units_of(settings, r['id'])],
             # 그날 밤 객실별 1박 요금 (기준인원 · 임시요금 반영) — 예약 달력에 객실 · 금액 표시용
             'prices': {r['id']: night_price(prices, r, d, specials)[0] for r in prices['rooms']} if open_day else {},
+            # 할인 중인 객실: 원래 요금 · 임시요금 메모 (손님 화면에 "원래 ○원 → 할인 ○원" 표시)
+            'sale': {r['id']: {'base': night_price(prices, r, d)[0],
+                               'note': (find_special(r, d, specials, weekend) or {}).get('note', '')}
+                     for r in prices['rooms']
+                     if open_day and night_price(prices, r, d, specials)[0] < night_price(prices, r, d)[0]},
         }
         d += timedelta(days=1)
     return {'month': month, 'days': days, 'total': len(prices['rooms']),
@@ -1132,6 +1145,8 @@ def search(checkin, checkout):
                 'cover': room.get('cover', ''), 'std': room['std'], 'max': room['max'],
                 'extra': room.get('extra', ''), 'extraPerson': extra_person_fee(room), 'desc': room.get('desc', ''),
                 'room_amount': q['room_amount'], 'nights': q['nights'],
+                # 할인 전 원래 객실 요금 (같으면 할인 없음)
+                'base_amount': sum(night_price(prices, room, date.fromisoformat(n['date']))[0] for n in q['nights']),
                 'available': is_available(settings, room['id'], q['checkin'], q['checkout']),
             })
     return out
