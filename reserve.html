@@ -47,6 +47,16 @@
   .day.sun .d, .day.hol .d { color:var(--red); } .day.sat .d { color:var(--sat); }
   .day.peak::after { content:'성수기'; position:absolute; top:3px; right:4px; font-size:9px; color:#c05621; font-weight:700; }
   .day.full .s { color:var(--red); }
+  .day .p { font-size:10.5px; display:block; color:var(--gray); font-weight:600; margin-top:1px; }
+  .day.start .p, .day.end .p { color:#fff; }
+  .day-rooms { margin-top:12px; border:1.5px solid var(--line); border-radius:12px; padding:12px 14px; background:#fff; }
+  .day-rooms h4 { font-size:14.5px; margin:0 0 8px; }
+  .day-rooms table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  .day-rooms td { padding:5px 2px; border-top:1px solid var(--line); }
+  .day-rooms td.pr { text-align:right; font-weight:700; white-space:nowrap; }
+  .day-rooms td.av { text-align:right; width:52px; font-size:12px; font-weight:700; color:var(--ok); }
+  .day-rooms tr.off td { color:#b8c2ca; } .day-rooms tr.off td.av { color:var(--red); }
+  .day-rooms .sale { font-size:11px; color:var(--red); margin-left:4px; }
   .day.closed { background:transparent; cursor:default; } .day.closed .d { color:#c3ccd3 !important; } .day.closed .s { display:none; }
   .day.empty { visibility:hidden; }
   .day.in { background:#d6eaf7; }
@@ -165,7 +175,8 @@
           <button id="cal-next" aria-label="다음 달">›</button>
         </div>
         <div class="cal" id="cal"></div>
-        <div class="legend"><span>숫자: 예약 가능 객실 수</span><span style="color:#c05621">성수기</span><span style="color:var(--red)">일 · 공휴일</span><span>입실일 → 퇴실일 순서로 눌러 주세요</span></div>
+        <div class="day-rooms" id="day-rooms" hidden></div>
+        <div class="legend"><span>숫자: 예약 가능 객실 수 · 최저 1박 요금</span><span style="color:#c05621">성수기</span><span style="color:var(--red)">일 · 공휴일</span><span>입실일 → 퇴실일 순서로 눌러 주세요</span></div>
       </div>
 
       <div class="step" id="step-rooms" hidden>
@@ -302,10 +313,30 @@ function renderCalendar() {
       closed && 'closed', info.open && n === 0 && 'full',
       ds === ci && 'start', ds === co && 'end', ci && co && ds > ci && ds < co && 'in'].filter(Boolean).join(' ');
     const sub = info.open ? (n ? `${n}실 가능` : '마감') : '';
-    html += `<button class="${cls}" data-d="${ds}" ${closed ? 'disabled' : ''}><span class="d">${d.getDate()}</span><span class="s">${sub}</span></button>`;
+    const low = n ? Math.min(...info.rooms.map(id => info.prices[id] || Infinity)) : 0;
+    const price = low && isFinite(low) ? `<span class="p">${manwon(low)}~</span>` : '';
+    html += `<button class="${cls}" data-d="${ds}" ${closed ? 'disabled' : ''}><span class="d">${d.getDate()}</span><span class="s">${sub}</span>${price}</button>`;
   });
   box.innerHTML = html;
+  const def = (ci && calData.days[ci]) ? ci : Object.keys(calData.days).find(ds => calData.days[ds].open && calData.days[ds].rooms.length);
+  showDayRooms(def);
 }
+
+const manwon = p => (p % 10000 ? (Math.floor(p / 1000) / 10).toFixed(1) : p / 10000) + '만';
+// 달력 아래: 고른(또는 손가락 · 마우스를 올린) 날짜의 객실별 1박 요금과 예약 가능 여부
+function showDayRooms(ds) {
+  const panel = $('day-rooms'), info = ds && calData.days[ds];
+  if (!info || !info.open) { panel.hidden = true; return; }
+  const base = calData.roomList;
+  panel.innerHTML = `<h4>🏕 ${fmt(ds)} 객실 · 1박 요금 <small style="color:var(--gray);font-weight:500">(기준인원 · ${info.peak ? '성수기' : '비수기'}${info.weekend ? ' 주말' : ' 평일'})</small></h4>
+    <table>${base.map(r => {
+      const ok = info.rooms.includes(r.id);
+      return `<tr class="${ok ? '' : 'off'}"><td>${esc(r.name)} <small style="color:var(--gray)">기준 ${r.std}명 · 최대 ${r.max}명</small></td>
+        <td class="pr">${info.prices[r.id] ? won(info.prices[r.id]) + '원' : '-'}</td><td class="av">${ok ? '가능' : '마감'}</td></tr>`;
+    }).join('')}</table>`;
+  panel.hidden = false;
+}
+$('cal').addEventListener('mouseover', e => { const b = e.target.closest('.day'); if (b && !b.disabled && b.dataset.d) showDayRooms(b.dataset.d); });
 
 $('cal').addEventListener('click', e => {
   const btn = e.target.closest('.day');

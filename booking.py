@@ -1088,6 +1088,7 @@ def month_calendar(month):
     settings, prices = load_settings(), load_prices()
     today, limit = date.today(), open_until(settings)
     holidays = set(prices.get('holidays', []))
+    specials = settings.get('specialPrices') or []
     with _lock:
         expire_overdue()
         counts = {r['id']: booked_counts(r['id'], first, nxt) for r in prices['rooms']}
@@ -1100,9 +1101,12 @@ def month_calendar(month):
             'open': open_day, 'peak': peak, 'weekend': weekend, 'holiday': d.isoformat() in holidays,
             'rooms': [r['id'] for r in prices['rooms']
                       if open_day and counts[r['id']].get(d, 0) < units_of(settings, r['id'])],
+            # 그날 밤 객실별 1박 요금 (기준인원 · 임시요금 반영) — 예약 달력에 객실 · 금액 표시용
+            'prices': {r['id']: night_price(prices, r, d, specials)[0] for r in prices['rooms']} if open_day else {},
         }
         d += timedelta(days=1)
-    return {'month': month, 'days': days, 'total': len(prices['rooms'])}
+    return {'month': month, 'days': days, 'total': len(prices['rooms']),
+            'roomList': [{'id': r['id'], 'name': r['name'], 'std': r['std'], 'max': r['max']} for r in prices['rooms']]}
 
 
 def search(checkin, checkout):
