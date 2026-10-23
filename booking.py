@@ -83,6 +83,14 @@ DEFAULT_SETTINGS = {
         'admin_cancel': '[손님취소]{이름} {연락처} {입실} {객실} 환불{환불}원',
         'admin_expired': '[미입금 자동취소]{이름} {연락처} {객실} {입실} {금액}원',
     },
+    # 사장님 텔레그램 알림 문구 (운영관리 → 문자발송설정에서 수정). 값이 비어 있는 항목이 든 줄은 자동으로 빠짐
+    'tgTemplates': {
+        'admin': '🔔 새 예약 (입금대기)\n{이름} {연락처}\n{입실} ~ {퇴실} ({박}박)\n{객실상세}\n합계 {금액}원\n'
+                 '입금기한 {입금기한}\n요청사항: {요청사항}\n예약번호 {예약번호}',
+        'admin_cancel': '↩️ 손님 직접 취소\n{이름} {연락처}\n{입실} ~ {퇴실} ({박}박)\n{객실상세}\n합계 {금액}원\n'
+                        '환불할 금액 {환불}원\n환불계좌: {환불계좌}\n예약번호 {예약번호}',
+        'admin_expired': '⏰ 미입금 자동취소\n{이름} {연락처}\n{입실} ~ {퇴실} ({박}박)\n{객실상세}\n합계 {금액}원\n예약번호 {예약번호}',
+    },
 }
 
 SCHEMA = """
@@ -1158,12 +1166,19 @@ def fmt_deadline(ts):
     return f'{t.month}/{t.day}({WEEKDAY[t.weekday()]}) {t.hour:02d}:{t.minute:02d}'
 
 
-def render_template(tpl, rows, settings=None):
-    """문자 문구의 {이름} 같은 항목을 실제 값으로 바꿈. rows = 같은 예약번호로 묶인 객실들"""
+def render_template(tpl, rows, settings=None, drop_empty=False):
+    """문자 문구의 {이름} 같은 항목을 실제 값으로 바꿈. rows = 같은 예약번호로 묶인 객실들
+    drop_empty=True 면 값이 빈 항목이 들어 있는 줄은 통째로 뺌 (텔레그램 알림용)"""
     settings = settings or load_settings()
     names = {r['id']: r['name'] for r in load_prices()['rooms']}
     r = rows[0]
+    opt_text = lambda x: ', '.join(f'{o["name"]} {o.get("detail", "")} x{o["qty"]}'.replace('  ', ' ') for o in x['options'])
     vals = {
+        '객실상세': '\n'.join(f'· {names.get(x["room_id"], x["room_id"])} {x["guests"]}명 {x["total"]:,}원'
+                          + (f' ({opt_text(x)})' if opt_text(x) else '') for x in rows),
+        '옵션': ', '.join(t for t in (opt_text(x) for x in rows) if t),
+        '요청사항': r.get('request') or '', '메모': r.get('memo') or '', '예약경로': r.get('source') or '',
+        '환불계좌': r.get('refund_info') or '',
         '예약번호': r['group_code'] or r['code'], '이름': r['name'], '연락처': fmt_phone(r['phone']),
         '객실': ', '.join(names.get(x['room_id'], x['room_id']) for x in rows),
         '입실': fmt_day(r['checkin']), '퇴실': fmt_day(r['checkout']), '박': r['nights'],
@@ -1173,7 +1188,12 @@ def render_template(tpl, rows, settings=None):
         '계좌': settings.get('bankShort') or settings['bank'], '입금기한': fmt_deadline(r.get('deadline')),
         '펜션전화': settings['phone'],
     }
-    return re.sub(r'\{([^{}]+)\}', lambda m: str(vals.get(m.group(1), m.group(0))), tpl)
+    sub = lambda text: re.sub(r'\{([^{}]+)\}', lambda m: str(vals.get(m.group(1), m.group(0))), text)
+    if not drop_empty:
+        return sub(tpl)
+    keep = [line for line in tpl.split('\n')
+            if all(str(vals.get(k, 'x')).strip() not in ('', '0') for k in re.findall(r'\{([^{}]+)\}', line))]
+    return sub('\n'.join(keep))
 
 
 def aligo_call(path, fields, settings):
@@ -1276,8 +1296,10 @@ def mask_name(name):
 
 
 def admin_detail_text(kind, rows, settings):
-    """텔레그램용 알림. 텔레그램은 해외 서버라 손님 정보는 가려서 보냄
-    (이름 일부 · 전화 끝 4자리만 — 전체 정보는 관리자 화면에서 확인)"""
+    """사장님 텔레그램 알림 — 운영관리에서 고친 문구(tgTemplates) 사용, 비어 있으면 기본 문구"""
+    tpl = (settings.get('tgTemplates') or {}).get(kind) or DEFAULT_SETTINGS['tgTemplates'].get(kind)
+    if tpl:
+        return render_template(tpl, rows, settings, drop_empty=True)
     names = {r['id']: r['name'] for r in load_prices()['rooms']}
     r = rows[0]
     title = {'admin': '🔔 새 예약 (입금대기)', 'admin_cancel': '↩️ 손님 직접 취소',
@@ -1993,6 +2015,7 @@ def handle_admin(method, path, query, body):
             return 200, {'settings': load_settings(), 'peakPeriods': prices.get('peakPeriods', []),
                          'holidays': prices.get('holidays', []), 'sources': SOURCES, 'payMethods': PAY_METHODS,
                          'refundPolicy': refund_policy_text(load_settings()),
+                         'tgTemplateDefaults': DEFAULT_SETTINGS['tgTemplates'],
                          'rooms': [{'id': r['id'], 'name': r['name'], 'std': r['std'], 'max': r['max'],
                                     'group': r['group']} for r in prices['rooms']],
                          'options': [{'i': o['i'], 'name': o['name'], 'detail': o.get('detail', ''),

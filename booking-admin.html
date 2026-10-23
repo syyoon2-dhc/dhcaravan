@@ -522,6 +522,10 @@
         <div class="f"><label>채팅 ID</label><div class="row"><input id="t-chat" class="grow" placeholder="[채팅 ID 찾기]로 자동 입력"><button class="btn line sm" id="t-find" type="button">채팅 ID 찾기</button></div></div>
       </div>
       <div class="row" style="margin-top:10px"><button class="btn line" id="t-test" type="button">테스트 메시지 보내기</button><span class="hint" id="t-result"></span></div>
+      <h3 style="margin:16px 0 6px;font-size:15px">📝 내가 받는 알림 문구</h3>
+      <p class="vars" style="margin-bottom:8px">쓸 수 있는 항목: <code>{이름}</code> <code>{연락처}</code> <code>{객실}</code> <code>{객실상세}</code> <code>{입실}</code> <code>{퇴실}</code> <code>{박}</code> <code>{인원}</code> <code>{금액}</code> <code>{잔금}</code> <code>{옵션}</code> <code>{요청사항}</code> <code>{메모}</code> <code>{예약경로}</code> <code>{입금기한}</code> <code>{환불}</code> <code>{환불계좌}</code> <code>{예약번호}</code><br>
+        · 줄을 추가 · 삭제해서 원하는 내용만 받으세요. 값이 비어 있는 항목(예: 요청사항이 없는 예약)이 든 줄은 자동으로 빠집니다. <code>{객실상세}</code> = 객실마다 "객실 인원 금액 (옵션)" 한 줄씩.</p>
+      <div class="set-grid" id="t-templates"></div>
       <p class="hint" style="margin-top:8px">
         <b>처음 한 번 설정</b> ① 텔레그램에서 <b>@BotFather</b> 검색 → <code>/newbot</code> → 봇 이름 입력 (예: 동해카라반알림, 아이디는 _bot 으로 끝나게)
         → 받은 <b>토큰</b>을 위 칸에 붙여넣기 → [설정 저장]<br>
@@ -1497,6 +1501,11 @@ async function loadSettings(group) {
   $('s-admin-phone').value = s.adminPhone; $('s-admin-notify').checked = !!s.adminNotify;
   const tg = s.telegram || {};
   $('t-enabled').checked = !!tg.enabled; $('t-token').value = tg.botToken || ''; $('t-chat').value = tg.chatId || '';
+  const TG_LABEL = { admin: '🔔 새 예약', admin_cancel: '↩️ 손님 직접 취소', admin_expired: '⏰ 미입금 자동취소' };
+  const tgt = s.tgTemplates || {}, tgd = META.tgTemplateDefaults || {};
+  $('t-templates').innerHTML = Object.entries(TG_LABEL).map(([k, label]) => `<div class="f"><label>${label} <button type="button" class="btn gray sm" data-tg-reset="${k}" style="margin-left:6px">기본 문구로</button></label>
+    <textarea data-tgtpl="${k}" rows="9">${esc(tgt[k] || tgd[k] || '')}</textarea></div>`).join('');
+  $('t-templates').onclick = e => { const k = e.target.dataset.tgReset; if (k) document.querySelector(`[data-tgtpl="${k}"]`).value = tgd[k] || ''; };
   $('s-remind').innerHTML = Array.from({ length: 24 }, (_, h) => `<option value="${h}" ${h === s.reminderHour ? 'selected' : ''}>${h}시</option>`).join('');
   $('s-templates').innerHTML = Object.entries(TEMPLATE_LABEL).map(([k, label]) => `<div class="f">
     <label>${k.startsWith('admin') ? label : `<span class="chk"><input type="checkbox" data-auto="${k}" ${s.auto[k] !== false ? 'checked' : ''}> 자동 발송</span> · ${label}`}</label>
@@ -1548,6 +1557,7 @@ $('s-save').onclick = async () => {
     customerCancel: $('s-cust-cancel').checked, customerCategories: $('s-cats').value.split(',').map(s => s.trim()).filter(Boolean),
     adminPhone: $('s-admin-phone').value.trim(), adminNotify: $('s-admin-notify').checked, reminderHour: +$('s-remind').value,
     telegram: { enabled: $('t-enabled').checked, botToken: $('t-token').value.trim(), chatId: $('t-chat').value.trim() },
+    tgTemplates: Object.fromEntries([...document.querySelectorAll('[data-tgtpl]')].map(t => [t.dataset.tgtpl, t.value])),
     aligo: { enabled: $('a-enabled').checked, testmode: $('a-test').checked, key: $('a-key').value.trim(), userId: $('a-user').value.trim(), sender: $('a-sender').value.trim() },
     templates, auto, smsPrice: +$('s-sms-price').value || 0, lmsPrice: +$('s-lms-price').value || 0,
     monthlyFixedCost: +$('s-fixed').value || 0, compareFeeRate: +$('s-fee').value || 0,
