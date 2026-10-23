@@ -174,6 +174,7 @@ NEW_COLUMNS = {  # 예전 DB 파일에 없는 칸은 자동으로 추가
     'refund_account': "TEXT NOT NULL DEFAULT ''", 'refund_holder': "TEXT NOT NULL DEFAULT ''", 'refund_done_at': 'TEXT',
     'deposit_reminded': 'INTEGER NOT NULL DEFAULT 0',
     'agreed_at': 'TEXT', 'agree_ver': "TEXT NOT NULL DEFAULT ''",
+    'no_sms': 'INTEGER NOT NULL DEFAULT 0',  # 1 이면 이 예약은 손님 자동 문자를 보내지 않음 (관리자 등록 시 선택)
 }
 
 PRIVACY_VER = '2026-10-23'  # 예약 화면 동의 문구 · privacy.html 을 고치면 날짜도 바꾸기
@@ -652,17 +653,21 @@ def create_reservation(data):
         code = new_code()
         rid = _insert(q, status, source, deadline, name, phone, str(data.get('request', '')).strip()[:500],
                       str(data.get('memo', '')).strip()[:1000], total, paid, code, code, pay_method)
+        extra = {'no_sms': 1 if data.get('no_sms') else 0}
+        if paid and data.get('paid_date'):  # 통장에 실제로 입금된 날 (매출 · 입금 달력 기준)
+            extra['paid_at'] = parse_date(data['paid_date'], '입금일').isoformat() + now_str()[10:]
+        db().execute(f'UPDATE reservations SET {", ".join(k + "=?" for k in extra)} WHERE id=?', (*extra.values(), rid))
         db().commit()
         r = get_reservation(rid)
 
     if data.get('sms') and phone and status in ('pending', 'confirmed'):
-        notify('received' if status == 'pending' else 'confirmed', [r])
+        notify('received' if status == 'pending' else 'confirmed', [r], force=True)
     return r
 
 
 EDITABLE = ('room_id', 'checkin', 'checkout', 'guests', 'name', 'phone', 'request', 'memo', 'source',
             'room_amount', 'extra_amount', 'option_amount', 'total', 'paid', 'refund', 'deadline', 'options',
-            'pay_method', 'refund_bank', 'refund_account', 'refund_holder', 'refund_status')
+            'pay_method', 'refund_bank', 'refund_account', 'refund_holder', 'refund_status', 'no_sms')
 
 
 def update_reservation(rid, data):
@@ -680,6 +685,8 @@ def update_reservation(rid, data):
             new['pay_method'] = '기타'
         if 'refund_status' in new and new['refund_status'] not in ('', 'due', 'done'):
             new['refund_status'] = ''
+        if 'no_sms' in new:
+            new['no_sms'] = 1 if new['no_sms'] else 0
         for k in ('guests', 'room_amount', 'extra_amount', 'option_amount', 'total', 'paid', 'refund'):
             if k in new:
                 new[k] = int(new[k] or 0)
@@ -751,7 +758,7 @@ def set_status(rid, status, data=None):
         db().commit()
         rows = [get_reservation(t['id']) for t in targets]
     if data.get('sms') and status in ('confirmed', 'cancelled') and rows[0]['phone']:
-        notify(status, rows)
+        notify(status, rows, force=True)
     return rows
 
 
@@ -1241,9 +1248,12 @@ def admin_detail_text(kind, rows, settings):
     return '\n'.join(lines)
 
 
-def notify(kind, rows):
-    """자동 문자 (백그라운드로 발송 — 예약 처리가 문자 때문에 느려지지 않게)"""
+def notify(kind, rows, force=False):
+    """자동 문자 (백그라운드로 발송 — 예약 처리가 문자 때문에 느려지지 않게)
+    '문자 안 보냄' 예약은 손님 자동 문자를 건너뜀. force=True 는 관리자가 화면에서 직접 '문자 보내기'를 고른 경우"""
     settings = load_settings()
+    if not kind.startswith('admin') and not force and rows[0].get('no_sms'):
+        return
     if kind.startswith('admin'):
         tg = settings.get('telegram') or {}
         if tg.get('enabled') and tg.get('chatId'):  # 사장님 알림은 텔레그램 (무료, 자세히)
@@ -1358,6 +1368,23 @@ def daily_backup(keep=60):
         dst.close()
     for old in sorted(f for f in os.listdir(folder) if f.startswith('booking-'))[:-keep]:
         os.remove(os.path.join(folder, old))
+
+
+def backup_zip():
+    """지금 시점 예약 DB + 예약 설정을 zip 하나로 (관리자 화면 [백업 내려받기])"""
+    import zipfile
+    tmp = os.path.join(PRIVATE_DIR, '_download.db')
+    with _lock:
+        dst = sqlite3.connect(tmp)
+        db().backup(dst)
+        dst.close()
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+        z.write(tmp, 'booking.db')
+        if os.path.exists(SETTINGS_FILE):
+            z.write(SETTINGS_FILE, 'booking_settings.json')
+    os.remove(tmp)
+    return buf.getvalue()
 
 
 def purge_old_personal_info():
@@ -1936,6 +1963,8 @@ def handle_admin(method, path, query, body):
             f = list_filters(q)
             data, ctype, ext = export(f.pop('start'), f.pop('end'), **f)
             return 'file', data, ctype, f'reservations_{q("from")}_{q("to")}.{ext}'
+        if path == '/api/bk/backup':
+            return 'file', backup_zip(), 'application/zip', f'dhc-backup-{date.today().isoformat()}.zip'
     if method == 'POST':
         if path == '/api/bk/quote':
             return 200, quote(body.get('room_id'), body.get('checkin'), body.get('checkout'),

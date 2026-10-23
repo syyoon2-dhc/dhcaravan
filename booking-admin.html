@@ -504,7 +504,7 @@
       </div>
       <div class="row" style="margin-top:10px">
         <button class="btn line" id="a-balance">잔여 건수 확인</button>
-        <button class="btn line" id="a-myip">이 PC 인터넷 IP 확인</button>
+        <button class="btn line" id="a-myip">서버 인터넷 IP 확인</button>
         <span class="hint" id="a-result"></span>
       </div>
       <p class="hint" style="margin-top:8px">· 알리고 → [문자 API] → [신청/인증]에서 API Key를 발급받고, <b>발송 서버 IP</b>에 위 'IP 확인'으로 나온 번호를 등록하세요.<br>· 인터넷 IP가 바뀌면 문자가 실패합니다 (발송 기록에 '실패' 표시). 그때 새 IP를 다시 등록하세요.</p>
@@ -528,6 +528,13 @@
       <h2>💬 자동 문자 문구</h2>
       <p class="vars" style="margin-bottom:10px">쓸 수 있는 항목: <code>{이름}</code> <code>{예약번호}</code> <code>{객실}</code> <code>{입실}</code> <code>{퇴실}</code> <code>{박}</code> <code>{인원}</code> <code>{금액}</code> <code>{잔금}</code> <code>{환불}</code> <code>{계좌}</code> <code>{입금기한}</code> <code>{연락처}</code> <code>{펜션전화}</code></p>
       <div class="set-grid" id="s-templates"></div>
+    </div>
+    <div class="card" data-group="env">
+      <h2>💾 예약 데이터 백업</h2>
+      <div class="row"><button class="btn line" id="b-download" type="button">📥 백업 내려받기</button><span class="hint" id="b-result"></span></div>
+      <p class="hint" style="margin-top:8px">· 손님 예약 · 고객 · 문자 기록 · 예약 설정 전체를 파일 하나(zip)로 받습니다. 서버가 고장 나도 이 파일로 되살릴 수 있습니다.<br>
+        · <b>한 달에 한 번</b>, 그리고 성수기 전에 내려받아 USB나 내 PC에 보관하세요. 손님 개인정보가 들어 있으니 다른 사람에게 보내지 마세요.<br>
+        · 서버 안에도 하루 한 번 자동 백업(최근 60일)이 저장됩니다.</p>
     </div>
     <div class="card" data-group="env">
       <h2>💰 비용 계산 (매출관리 → 비용 · 정산자료)</h2>
@@ -1188,7 +1195,7 @@ async function openDetail(id) {
     <h3>${r.status === 'block' ? '⛔ 예약막음' : esc(r.name) + '님 예약'} ${statusTag(r)} ${refundTag(r)}</h3>`;
   if (group.length > 1) html += `<div class="group-note">🔗 한 번에 예약한 객실 ${group.length}개 (예약번호 ${esc(r.group_code)}): ${group.map(g => `${esc(roomName(g.room_id))} ${g.status_label}`).join(', ')}<br>입금확인 · 취소는 같은 상태인 ${same.length}개 객실에 함께 적용됩니다.</div>`;
   html += `<table class="kv">
-    <tr><th>예약번호</th><td>${esc(r.code)} <small class="hint">· ${esc(r.source)} · ${esc(r.pay_method)}</small></td></tr>
+    <tr><th>예약번호</th><td>${esc(r.code)} <small class="hint">· ${esc(r.source)} · ${esc(r.pay_method)}</small>${r.no_sms ? ' <small class="hint" title="자동 문자를 보내지 않는 예약">· 🔕 문자 안 보냄</small>' : ''}</td></tr>
     <tr><th>객실</th><td><b>${esc(roomName(r.room_id))}</b></td></tr>
     <tr><th>일정</th><td><b>${fmt(r.checkin)} ~ ${fmt(r.checkout)}</b> (${r.nights}박)</td></tr>`;
   if (r.status !== 'block') {
@@ -1237,7 +1244,7 @@ function actConfirm(r, same) {
     <b>입금 확인</b>${same.length > 1 ? ` <small class="hint">(${same.length}개 객실 합계 — 각 객실 금액으로 입금 처리)</small>` : ''}
     <div class="row" style="margin:8px 0">입금액 <input id="cf-paid" type="number" value="${total}" ${same.length > 1 ? 'disabled' : ''} style="width:140px">원
       <select id="cf-pay">${META.payMethods.map(p => `<option ${p === r.pay_method ? 'selected' : ''}>${p}</option>`).join('')}</select></div>
-    <label class="chk"><input type="checkbox" id="cf-sms" checked> 손님에게 예약확정 문자 보내기</label>
+    <label class="chk"><input type="checkbox" id="cf-sms" ${r.no_sms ? '' : 'checked'}> 손님에게 예약확정 문자 보내기${r.no_sms ? ' <small class="hint">(🔕 문자 안 보냄 예약)</small>' : ''}</label>
     <div style="margin-top:10px"><button class="btn green" id="cf-go">확정하기</button></div></div>`;
   $('cf-go').onclick = () => doStatus(r.id, 'confirmed', { paid: $('cf-paid').value, pay_method: $('cf-pay').value, sms: $('cf-sms').checked });
 }
@@ -1251,7 +1258,7 @@ function actCancel(r, same) {
       ? `<label class="chk"><input type="checkbox" id="cc-all"> 입금액 ${won(paid)}원 전액 환불</label><p class="hint">부분 환불은 취소 후 각 객실 '수정'에서 환불액을 입력하세요.</p>`
       : `<div class="row">환불액 <input id="cc-refund" type="number" value="0" style="width:130px">원 <span class="hint">(입금 ${won(paid)}원)</span></div>`)
       + `<div class="row" style="margin-top:6px"><input id="cc-bank" placeholder="환불은행" style="width:90px"><input id="cc-acc" placeholder="환불계좌" class="grow"><input id="cc-holder" placeholder="예금주" style="width:90px"></div>` : ''}
-    <label class="chk" style="margin-top:8px"><input type="checkbox" id="cc-sms" checked> 손님에게 취소 문자 보내기</label>
+    <label class="chk" style="margin-top:8px"><input type="checkbox" id="cc-sms" ${r.no_sms ? '' : 'checked'}> 손님에게 취소 문자 보내기${r.no_sms ? ' <small class="hint">(🔕 문자 안 보냄 예약)</small>' : ''}</label>
     <div style="margin-top:10px"><button class="btn red" id="cc-go">취소하기</button></div></div>`;
   $('cc-go').onclick = () => {
     if (!confirm('예약을 취소할까요?')) return;
@@ -1310,6 +1317,7 @@ function openForm(r) {
       <div class="f full nb"><div class="money-box" id="f-quote">객실 · 날짜 · 인원을 입력하면 요금이 자동 계산됩니다.</div></div>
       <div class="f nb"><label>결제금액 (할인 시 직접 수정)</label><input type="number" id="f-total" value="${edit ? r.total : ''}"></div>
       <div class="f nb"><label>입금액</label><input type="number" id="f-paid" value="${edit ? r.paid : ''}" placeholder="${edit ? '' : '확정이면 비워도 결제금액으로 처리'}"></div>
+      ${edit ? '' : `<div class="f nb paid-only"><label>입금일 (통장에 들어온 날)</label><input type="date" id="f-pdate" value="${TODAY}"></div>`}
       ${cancelled ? `<div class="f nb"><label>환불액</label><input type="number" id="f-refund" value="${r.refund}"></div>
         <div class="f nb"><label>환불 상태</label><select id="f-rstatus"><option value="">없음</option><option value="due" ${r.refund_status === 'due' ? 'selected' : ''}>환불예정</option><option value="done" ${r.refund_status === 'done' ? 'selected' : ''}>환불완료</option></select></div>
         <div class="f nb"><label>환불은행</label><input id="f-rbank" value="${esc(r.refund_bank)}"></div>
@@ -1317,7 +1325,8 @@ function openForm(r) {
         <div class="f nb"><label>예금주</label><input id="f-rholder" value="${esc(r.refund_holder)}"></div>` : ''}
       <div class="f full nb"><label>손님 요청사항</label><textarea id="f-request" rows="2">${esc(r.request || '')}</textarea></div>
       <div class="f full"><label>관리 메모 (손님에게 안 보임)</label><textarea id="f-memo" rows="2">${esc(r.memo || '')}</textarea></div>
-      ${edit ? '' : '<div class="f full nb"><label class="chk"><input type="checkbox" id="f-sms"> 손님에게 문자 보내기 (확정이면 확정 문자, 입금대기면 입금 안내 문자)</label></div>'}
+      <div class="f full nb"><label class="chk"><input type="checkbox" id="f-nosms" ${edit && r.no_sms ? 'checked' : ''}> 🔕 <b>이 예약은 손님에게 문자를 보내지 않습니다</b></label>
+        <p class="hint" style="margin-top:4px">체크하면 확정 · 입금 안내 · 입금기한 알림 · 입실 전날 안내 · 자동취소 · 환불 문자를 모두 보내지 않습니다 (문자비 절약). 전화 · 현장 예약처럼 손님이 이미 내용을 아는 경우에 쓰세요.${edit ? '' : '<br>체크하지 않으면 등록하자마자 손님에게 확정 문자(입금대기면 입금 안내 문자)가 갑니다.'}</p></div>
     </div>
     <p class="err" id="f-err"></p>
     <div class="actions"><button class="btn big" id="f-save">💾 ${edit ? '변경 저장' : '등록'}</button>${edit ? '<button class="btn gray" id="f-back">← 상세로</button>' : ''}</div>`;
@@ -1326,8 +1335,11 @@ function openForm(r) {
     const block = edit ? isBlock : $('f-status').value === 'block';
     box.querySelectorAll('.nb').forEach(el => { el.hidden = block; });
     box.querySelectorAll('.bk-only').forEach(el => { el.hidden = !block; });
+    if (!edit) box.querySelectorAll('.paid-only').forEach(el => { el.hidden = block || $('f-status').value !== 'confirmed'; });
   };
-  if (!edit) $('f-status').onchange = syncKind;
+  // 새 예약: 입금 완료(확정)는 손님이 이미 아는 경우가 많아 기본 '문자 안 보냄', 입금대기는 계좌 안내가 필요해 기본 '보냄'
+  const syncSmsDefault = () => { $('f-nosms').checked = $('f-status').value === 'confirmed'; };
+  if (!edit) { $('f-status').onchange = () => { syncKind(); syncSmsDefault(); }; syncSmsDefault(); }
   syncKind();
   if (edit) $('f-back').onclick = () => openDetail(r.id);
 
@@ -1359,18 +1371,19 @@ function openForm(r) {
       room_id: $('f-room').value, checkin: $('f-ci').value, checkout: $('f-co').value, name: $('f-name').value,
       phone: $('f-phone').value, guests: $('f-guests').value, source: $('f-source').value, pay_method: $('f-pay').value,
       options: q ? q.options : formOptions(), total: $('f-total').value, paid: $('f-paid').value,
-      request: $('f-request').value, memo: $('f-memo').value, force,
+      request: $('f-request').value, memo: $('f-memo').value, no_sms: $('f-nosms').checked, force,
     };
     if (q) Object.assign(body, { room_amount: q.room_amount, extra_amount: q.extra_amount, option_amount: q.option_amount });
     if (cancelled) Object.assign(body, { refund: $('f-refund').value, refund_status: $('f-rstatus').value, refund_bank: $('f-rbank').value, refund_account: $('f-racc').value, refund_holder: $('f-rholder').value });
     try {
       if (edit) {
-        if (isBlock) ['total', 'paid', 'guests', 'options', 'phone', 'room_amount', 'extra_amount', 'option_amount', 'pay_method'].forEach(k => delete body[k]);
+        if (isBlock) ['total', 'paid', 'guests', 'options', 'phone', 'room_amount', 'extra_amount', 'option_amount', 'pay_method', 'no_sms'].forEach(k => delete body[k]);
         if (body.paid === '') delete body.paid;
         await api('/api/bk/update', { id: r.id, ...body });
         toast('변경했습니다'); openDetail(r.id);
       } else {
-        body.status = $('f-status').value; body.sms = $('f-sms')?.checked;
+        body.status = $('f-status').value; body.sms = body.status !== 'block' && !body.no_sms;
+        if (body.status === 'confirmed') body.paid_date = $('f-pdate').value;
         await api('/api/bk/create', body);
         toast('등록했습니다'); closeModal(); refresh();
       }
@@ -1535,9 +1548,21 @@ $('t-test').onclick = async () => {
   try { await api('/api/bk/telegram/test', {}); $('t-result').textContent = '✓ 보냈습니다. 텔레그램을 확인하세요'; }
   catch (e) { $('t-result').textContent = '⚠️ ' + e.message + ' (설정 저장 후 다시 시도)'; }
 };
+$('b-download').onclick = async () => {
+  $('b-result').textContent = '만드는 중…';
+  try {
+    const res = await fetch('/api/bk/backup', { headers: { 'X-Auth-Token': TOKEN } });
+    if (!res.ok) throw new Error('백업 실패');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(await res.blob());
+    a.download = `동해카라반_예약백업_${TODAY}.zip`;
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    $('b-result').textContent = '✓ 내려받았습니다';
+  } catch (e) { $('b-result').textContent = '⚠️ ' + e.message; }
+};
 $('a-myip').onclick = async () => {
   $('a-result').textContent = '확인 중...';
-  try { const r = await api('/api/bk/myip'); $('a-result').innerHTML = `이 PC 인터넷 IP: <b style="color:var(--ink);font-size:15px">${esc(r.ip)}</b> ← 알리고 발송 서버 IP에 등록`; } catch (e) { $('a-result').textContent = '⚠️ ' + e.message; }
+  try { const r = await api('/api/bk/myip'); $('a-result').innerHTML = `서버 인터넷 IP: <b style="color:var(--ink);font-size:15px">${esc(r.ip)}</b> ← 알리고 발송 서버 IP에 등록`; } catch (e) { $('a-result').textContent = '⚠️ ' + e.message; }
 };
 
 /* =============== 시작 =============== */
