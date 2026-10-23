@@ -111,6 +111,9 @@ class Handler(SimpleHTTPRequestHandler):
         # 객실 사진/영상과 API 는 항상 최신으로
         if self.path.startswith(('/images/rooms/', '/images/photos/', '/images/popup', '/data/', '/api/')):
             self.send_header('Cache-Control', 'no-store')
+        elif urlparse(self.path).path.endswith(('.html', '/', '.js', '.css')):
+            # 화면 · 프로그램 파일은 매번 새 버전인지 확인 (업데이트가 바로 보이게)
+            self.send_header('Cache-Control', 'no-cache')
         if self.path.startswith('/api/public/'):
             self._cors()
         super().end_headers()
