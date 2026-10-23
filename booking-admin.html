@@ -93,6 +93,7 @@
   .mcal .cell.today { background:#fffbe6; }
   .mcal .dnum { font-weight:800; font-size:13.5px; display:flex; align-items:center; gap:5px; margin-bottom:3px; }
   .mcal .tag { font-size:10.5px; font-weight:700; padding:0 6px; border-radius:4px; background:#fde8d7; color:#b45309; }
+  .mcal .tag.sale { background:#fde2e2; color:var(--red); max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .mcal .tot { font-weight:700; margin-bottom:2px; }
   .mcal button.tot { display:block; border:0; background:none; padding:1px 3px; font:inherit; font-weight:700; color:var(--ink); cursor:pointer; border-radius:4px; text-align:left; }
   .mcal button.tot:hover { background:var(--sky); text-decoration:underline; }
@@ -191,6 +192,7 @@
     /* 휴대폰: 날짜 칸에는 요약만 (남은 객실 · 예약 · 입금대기 수), 누르면 그날 상세 창 */
     .mcal .cell { min-height:68px; padding:2px; }
     .mcal .tot, .mcal button.tot, .mcal .cl, .mcal .blockall, .mcal .tag { display:none; }
+    .mcal .dnum { flex-direction:column; align-items:center; gap:0; } .mcal .tag.sale { display:block; font-size:9px; padding:0 3px; max-width:100%; }
     .mcal .dnum { justify-content:center; font-size:12.5px; margin-bottom:0; }
     .mcal .mob { display:flex; flex-direction:column; align-items:center; gap:1px; width:100%; border:0; background:none; padding:1px 0; cursor:pointer; font:inherit; color:var(--ink); }
     .mcal .mob b { font-size:15px; line-height:1.1; color:var(--ok-tx); } .mcal .mob b.zero { color:var(--red); }
@@ -651,7 +653,12 @@ function monthCalendar(month, cellFn) {
     const cls = ['cell', !inMonth && 'out', ds < TODAY && 'past', ds === TODAY && 'today'].filter(Boolean).join(' ');
     const dcls = d.getDay() === 0 || hol.has(ds) ? 'sun' : d.getDay() === 6 ? 'sat' : '';
     const peak = META.peakPeriods.some(p => p.start <= ds && ds <= p.end);
-    html += `<div class="${cls}"><div class="dnum ${dcls}">${d.getDate()}${peak && inMonth ? '<span class="tag">성수기</span>' : ''}</div>${inMonth ? cellFn(ds) : ''}</div>`;
+    // 임시요금(할인)이 걸린 날 — 주말 기준은 서버와 같음 (토요일 · 공휴일 전날 · 성수기 금요일)
+    const weekend = d.getDay() === 6 || hol.has(addDays(ds, 1)) || (peak && d.getDay() === 5);
+    const sp = inMonth && (META.settings.specialPrices || []).find(s => s.start <= ds && ds <= s.end
+      && !(s.days === 'weekend' && !weekend) && !(s.days === 'weekday' && weekend));
+    const saleTag = sp ? `<span class="tag sale" title="${esc(sp.note || '임시요금')}">${esc(sp.note || '할인')}</span>` : '';
+    html += `<div class="${cls}"><div class="dnum ${dcls}">${d.getDate()}${peak && inMonth ? '<span class="tag">성수기</span>' : ''}${saleTag}</div>${inMonth ? cellFn(ds) : ''}</div>`;
   }
   return html + '</div>';
 }
