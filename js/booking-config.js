@@ -1,8 +1,7 @@
 /* ============ 예약 서버 주소 ============
- * 펜션 PC 의 server.py 를 Cloudflare Tunnel 로 연결한 인터넷 주소를 넣으세요.
- * 예) window.DHC_API_BASE = 'https://booking.dhcaravan.com';
+ * iwinv 서버(Tailscale Funnel)의 인터넷 주소 — 2026-10-24 연결
  *
- * 비워 두면 지금 열린 주소의 서버를 그대로 사용합니다.
- * (펜션 PC 에서 http://localhost:8000/reserve.html 로 열 때는 비워 둬도 됨)
+ * GitHub 홈페이지(github.io)에서 열 때만 이 서버를 쓰고,
+ * 서버 주소나 http://localhost:8000 으로 열 때는 지금 열린 서버를 그대로 사용합니다.
  */
-window.DHC_API_BASE = '';
+window.DHC_API_BASE = location.hostname.endsWith('github.io') ? 'https://dhc.tail2b0b5e.ts.net' : '';
