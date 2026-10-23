@@ -96,6 +96,11 @@
   .mcal .tot { font-weight:700; margin-bottom:2px; }
   .mcal button.tot { display:block; border:0; background:none; padding:1px 3px; font:inherit; font-weight:700; color:var(--ink); cursor:pointer; border-radius:4px; text-align:left; }
   .mcal button.tot:hover { background:var(--sky); text-decoration:underline; }
+  .mcal .mob { display:none; }
+  .dy-cards { display:none; }
+  .dy-card { border:1px solid var(--line); border-radius:10px; padding:9px 11px; margin-bottom:7px; font-size:13.5px; line-height:1.6; cursor:pointer; }
+  .dy-card .top-line { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .dy-free { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
   .mcal .cl { display:block; width:100%; text-align:left; border:0; background:none; padding:1px 3px; margin:1px 0; border-radius:4px; font-size:11.5px; line-height:1.45; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--ink); }
   .mcal .cl:hover { background:var(--sky); }
   .mcal .cl.free { color:var(--gray); }
@@ -183,8 +188,20 @@
   .login-box button { width:100%; padding:14px; font-size:16px; }
   @media (max-width:700px) {
     .fgrid { grid-template-columns:1fr; }
-    .mcal .cell { min-height:90px; padding:3px; }
-    .mcal .cl { font-size:10.5px; }
+    /* 휴대폰: 날짜 칸에는 요약만 (남은 객실 · 예약 · 입금대기 수), 누르면 그날 상세 창 */
+    .mcal .cell { min-height:68px; padding:2px; }
+    .mcal .tot, .mcal button.tot, .mcal .cl, .mcal .blockall, .mcal .tag { display:none; }
+    .mcal .dnum { justify-content:center; font-size:12.5px; margin-bottom:0; }
+    .mcal .mob { display:flex; flex-direction:column; align-items:center; gap:1px; width:100%; border:0; background:none; padding:1px 0; cursor:pointer; font:inherit; color:var(--ink); }
+    .mcal .mob b { font-size:15px; line-height:1.1; color:var(--ok-tx); } .mcal .mob b.zero { color:var(--red); }
+    .mcal .mob small { font-size:9.5px; color:var(--gray); line-height:1; }
+    .mcal .mob i { font-style:normal; font-size:10px; font-weight:700; border-radius:8px; padding:0 5px; line-height:1.5; }
+    .mcal .mob .mc { background:#fde2e2; color:var(--red); } .mcal .mob .mp { background:var(--pending-bg); color:var(--pending-tx); }
+    .mcal .cell.past .mob b { color:var(--gray); }
+    .dy-wrap { display:none; } .dy-cards { display:block; }
+    .tiles { grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; } .tile { padding:8px 9px; }
+    .tile .lb { font-size:11px; } .tile .v { font-size:17px; } .tile .v small { font-size:10.5px; }
+    .modal { padding:10px 6px; } .modal-box { padding:16px 14px; }
     .menu button { padding:9px 12px; font-size:14.5px; }
   }
 </style>
@@ -235,7 +252,7 @@
       </div>
       <div id="c-month"></div>
       <div class="board-scroll" id="c-grid-wrap" hidden><table class="board" id="c-grid"></table></div>
-      <p class="hint" style="margin-top:8px">예약 가능한 객실을 누르면 그 날짜로 예약 등록, 예약을 누르면 상세 보기 · 입금 확인 · 취소. [전체예약불가]는 그날 남은 객실을 모두 막습니다.</p>
+      <p class="hint" style="margin-top:8px">예약 가능한 객실을 누르면 그 날짜로 예약 등록, 예약을 누르면 상세 보기 · 입금 확인 · 취소. [전체예약불가]는 그날 남은 객실을 모두 막습니다. 휴대폰에서는 날짜를 누르면 그날 예약 · 빈 객실이 한 화면에 나옵니다.</p>
     </div>
   </section>
 
@@ -752,7 +769,10 @@ async function loadCal() {
       });
       if (left) lines += `<button class="cl free ${past ? 'past' : ''}" ${past ? 'disabled' : `data-room="${room.id}" data-d="${ds}"`}>${esc(room.name)} <b>(${left}/${unitsOf(room.id)})</b></button>`;
     });
-    return `<button class="tot" data-day="${ds}" title="이 날 예약자 정보 보기 · 프린트">• 전체 (${free}/${totalUnits}) 🔍</button>${lines}` + (!past && free ? `<button class="blockall" data-d="${ds}" data-free="${free}">[전체예약불가]</button>` : '');
+    const night = items.filter(r => r.checkin <= ds && ds < r.checkout);
+    const nc = night.filter(r => r.status === 'confirmed').length, np = night.filter(r => r.status === 'pending').length;
+    const mob = `<button class="mob" data-day="${ds}"><b class="${free ? '' : 'zero'}">${free}</b><small>남음</small>${nc ? `<i class="mc">예약 ${nc}</i>` : ''}${np ? `<i class="mp">입금 ${np}</i>` : ''}</button>`;
+    return mob + `<button class="tot" data-day="${ds}" title="이 날 예약자 정보 보기 · 프린트">• 전체 (${free}/${totalUnits}) 🔍</button>${lines}` + (!past && free ? `<button class="blockall" data-d="${ds}" data-free="${free}">[전체예약불가]</button>` : '');
   });
 }
 $('c-month').onclick = async e => {
@@ -797,8 +817,14 @@ async function openDay(ds) {
     const groups = META.rooms.map(room => ({ room, rows: list.filter(r => r.room_id === room.id) })).filter(g => g.rows.length);
     const people = list.filter(r => r.status !== 'block').reduce((a, r) => a + r.guests, 0);
     $('dy-body').innerHTML = `<p class="hint" style="margin-bottom:8px">예약 ${list.filter(r => r.status !== 'block').length}건 · ${people}명 · 이날 입실 ${list.filter(r => r.checkin === ds && r.status !== 'block').length}건 · 남은 객실 ${META.rooms.reduce((a, r) => a + unitsOf(r.id), 0) - new Set(items.map(r => r.id)).size}개</p>` +
+      freeHtml() +
       (groups.length ? groups.map(g => `<div style="margin:12px 0 4px;font-weight:700">▪ 사이트 : ${esc(g.room.name)}</div>
-      <div class="tbl-wrap"><table class="list dy-table"><thead><tr><th>No</th><th>상태</th><th>이용자명</th><th>연락처</th><th>인원</th><th>옵션</th><th>예약일자</th><th>예약금액</th><th>입금</th><th>결제</th></tr></thead><tbody>` +
+      <div class="dy-cards">${g.rows.map(r => `<div class="dy-card" data-id="${r.id}"><div class="top-line">${statusTag(r)} <b>${esc(r.name)}</b>
+          ${r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone_fmt)}</a>` : ''}</div>
+        ${fmt(r.checkin)}~${fmt(r.checkout)} ${r.nights}박${r.status === 'block' ? '' : ` · ${r.guests}명 · ${won(r.total)}원${r.total - r.paid > 0 ? ` <b style="color:var(--red)">(미입금 ${won(r.total - r.paid)})</b>` : ''}`}
+        ${r.options.length ? `<br><small>${r.options.map(o => `${esc(o.name)}×${o.qty}`).join(', ')}</small>` : ''}
+        ${r.memo ? `<br><small><b>메모</b> ${esc(r.memo)}</small>` : ''}${r.request ? `<br><small><b>요청</b> ${esc(r.request)}</small>` : ''}</div>`).join('')}</div>
+      <div class="tbl-wrap dy-wrap"><table class="list dy-table"><thead><tr><th>No</th><th>상태</th><th>이용자명</th><th>연락처</th><th>인원</th><th>옵션</th><th>예약일자</th><th>예약금액</th><th>입금</th><th>결제</th></tr></thead><tbody>` +
         g.rows.map(r => `<tr class="click" data-id="${r.id}"><td>${++n}</td><td>${statusTag(r)}</td><td class="nw"><b>${esc(r.name)}</b></td>
           <td class="nw">${r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone_fmt)}</a>` : '-'}</td><td>${r.status === 'block' ? '-' : r.guests + '명'}</td>
           <td class="l"><small>${r.options.map(o => `${esc(o.name)}×${o.qty}`).join(', ') || '-'}</small></td>
@@ -807,9 +833,29 @@ async function openDay(ds) {
           (r.memo || r.request ? `<tr data-id="${r.id}" class="click"><td colspan="10" class="l"><small>${r.memo ? `<b>관리메모 :</b> ${esc(r.memo)}` : ''}${r.memo && r.request ? ' &nbsp;·&nbsp; ' : ''}${r.request ? `<b>요청 :</b> ${esc(r.request)}` : ''}</small></td></tr>` : '')).join('') +
         '</tbody></table></div>').join('') : '<p class="empty-msg">이 날 예약이 없습니다</p>');
   };
+  function freeHtml() {
+    if (ds < TODAY) return '';
+    const free = META.rooms.filter(room => items.filter(r => r.room_id === room.id).length < unitsOf(room.id));
+    return `<div class="inner-card" style="margin-bottom:10px"><b>빈 객실</b> <small class="hint">눌러서 이 날짜로 예약 등록</small>
+      <div class="dy-free">${free.length ? free.map(room => `<button class="btn line sm" type="button" data-new-room="${room.id}">＋ ${esc(room.name)}</button>`).join('')
+        + `<button class="btn red sm" type="button" data-block-all="${free.length}">전체예약불가</button>` : '<span class="hint">모두 찼습니다</span>'}</div></div>`;
+  }
   ['dy-block', 'dy-in'].forEach(id => $(id).onchange = render);
   $('dy-q').oninput = render;
-  $('dy-body').onclick = e => { if (e.target.closest('a')) return; const tr = e.target.closest('tr[data-id]'); if (tr) openDetail(+tr.dataset.id); };
+  $('dy-body').onclick = async e => {
+    if (e.target.closest('a')) return;
+    const nb = e.target.closest('[data-new-room]');
+    if (nb) return openForm({ room_id: nb.dataset.newRoom, checkin: ds, checkout: addDays(ds, 1) });
+    const ba = e.target.closest('[data-block-all]');
+    if (ba) {
+      const reason = prompt(`${fmt(ds)} 남은 객실 ${ba.dataset.blockAll}개를 모두 예약불가로 막습니다.
+이유를 입력하세요 (예: 단체 행사, 휴무)`, '전체예약불가');
+      if (reason === null) return;
+      try { const r = await api('/api/bk/block-all', { date: ds, reason }); toast(`${r.made}개 객실을 막았습니다`); closeModal(); loadCal(); } catch (err) { toast('⚠️ ' + err.message); }
+      return;
+    }
+    const tr = e.target.closest('[data-id]'); if (tr) openDetail(+tr.dataset.id);
+  };
   $('dy-sms').onclick = () => {
     const ids = shown().filter(r => r.status !== 'block' && r.phone).map(r => r.id);
     if (!ids.length) return toast('문자 보낼 예약이 없습니다');
@@ -821,7 +867,7 @@ async function openDay(ds) {
     w.document.write(`<!doctype html><meta charset="utf-8"><title>예약자정보 ${title}</title>
       <style>body{font-family:'Malgun Gothic',sans-serif;font-size:12px;margin:16px}h2{text-align:center;text-decoration:underline}
       table{width:100%;border-collapse:collapse;margin-bottom:6px}th,td{border:1px solid #999;padding:4px 5px;text-align:center}th{background:#eee}
-      td.l{text-align:left}a{color:inherit;text-decoration:none}.hint{color:#555}.st{border:1px solid #999;border-radius:3px;padding:0 4px}</style>
+      td.l{text-align:left}a{color:inherit;text-decoration:none}.dy-cards,.inner-card{display:none}.hint{color:#555}.st{border:1px solid #999;border-radius:3px;padding:0 4px}</style>
       <h2>예약자정보 확인</h2><p><b>예약일자 : ${title}</b></p>${$('dy-body').innerHTML}`);
     w.document.close(); w.focus(); w.print();
   };
