@@ -610,6 +610,29 @@ def check_two_night(settings, checkin, checkout):
                        f'(입실 {tn["releaseDays"]}일 전부터는 1박도 가능)')
 
 
+def option_left(settings, checkin, checkout, exclude_id=None):
+    """수량 제한이 있는 옵션의 남은 수량 {"0": 2} — 묵는 날 중 가장 적게 남은 날 기준 (exclude_id: 수정 중인 예약은 빼고 계산)"""
+    limits = settings.get('optionLimits') or {}
+    try:
+        ci, co = date.fromisoformat(str(checkin)), date.fromisoformat(str(checkout))
+    except ValueError:
+        return {}
+    if not limits or co <= ci:
+        return {}
+    rows = [row_dict(r) for r in db().execute(
+        "SELECT * FROM reservations WHERE status IN ('pending','confirmed') AND checkin < ? AND checkout > ? "
+        "AND options != '[]' AND id != ?", (co.isoformat(), ci.isoformat(), int(exclude_id or 0))).fetchall()]
+    left = {}
+    d = ci
+    while d < co:
+        ds = d.isoformat()
+        for i, limit in limits.items():
+            used = sum(o['qty'] for r in rows if r['checkin'] <= ds < r['checkout'] for o in r['options'] if str(o['i']) == i)
+            left[i] = min(left.get(i, limit), max(0, limit - used))
+        d += timedelta(days=1)
+    return left
+
+
 def check_option_limits(settings, quotes):
     """옵션 하루 수량 제한 (예: 바비큐 장비 하루 3개)"""
     limits = settings.get('optionLimits') or {}
@@ -2007,7 +2030,10 @@ def handle_public(method, path, query, body, ip):
     if method == 'GET' and path == '/api/public/calendar':
         return 200, month_calendar(q('month'))
     if method == 'GET' and path == '/api/public/search':
-        return 200, {'rooms': search(q('checkin'), q('checkout'))}
+        rooms = search(q('checkin'), q('checkout'))
+        with _lock:
+            left = option_left(load_settings(), q('checkin'), q('checkout'))
+        return 200, {'rooms': rooms, 'option_left': left}
     if method == 'POST' and path == '/api/public/quote':
         settings, prices = load_settings(), load_prices()
         quotes = [quote(it.get('room_id'), body.get('checkin'), body.get('checkout'), it.get('guests'),
@@ -2062,6 +2088,9 @@ def handle_admin(method, path, query, body):
             return 200, {'items': monthly_report(q('from'), q('to'), q('basis') or 'created')}
         if path == '/api/bk/options':
             return 200, options_calendar(q('month'))
+        if path == '/api/bk/option-left':
+            with _lock:
+                return 200, option_left(load_settings(), q('checkin'), q('checkout'), q('exclude') or None)
         if path == '/api/bk/reservation':
             with _lock:
                 r = get_reservation(int(q('id', '0')))

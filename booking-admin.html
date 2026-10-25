@@ -1565,7 +1565,7 @@ function openForm(r) {
       <div class="f nb"><label>인원</label><input type="number" id="f-guests" min="1" value="${r.guests || ''}"></div>
       <div class="f nb"><label>예약 경로</label><select id="f-source">${META.sources.map(s => `<option ${s === (r.source || '전화') ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
       <div class="f nb"><label>결제구분</label><select id="f-pay">${META.payMethods.map(s => `<option ${s === (r.pay_method || '무통장') ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
-      ${META.options.map(o => `<div class="f nb"><label>${esc(o.name)} ${esc(o.detail)} (${o.price ? won(o.price) + '원' : '무료'})</label><select data-opt="${o.i}">${[0, 1, 2, 3].map(n => `<option value="${n}" ${n === optQty(o.i) ? 'selected' : ''}>${n}개</option>`).join('')}</select></div>`).join('')}
+      ${META.options.map(o => `<div class="f nb"><label>${esc(o.name)} ${esc(o.detail)} (${o.price ? won(o.price) + '원' : '무료'}) <b data-optleft="${o.i}" style="color:var(--red)"></b></label><select data-opt="${o.i}">${[0, 1, 2, 3].map(n => `<option value="${n}" ${n === optQty(o.i) ? 'selected' : ''}>${n}개</option>`).join('')}</select></div>`).join('')}
       <div class="f full nb"><div class="money-box" id="f-quote">객실 · 날짜 · 인원을 입력하면 요금이 자동 계산됩니다.</div></div>
       <div class="f nb"><label>결제금액 (할인 시 직접 수정${edit ? '' : ' · 첫 객실'})</label><input type="number" id="f-total" value="${edit ? r.total : ''}"></div>
       <div class="f nb"><label>입금액</label><input type="number" id="f-paid" value="${edit ? r.paid : ''}" placeholder="${edit ? '' : '확정이면 비워도 결제금액으로 처리'}"></div>
@@ -1620,11 +1620,23 @@ function openForm(r) {
     } catch (e) { $('f-quote').innerHTML = `<span style="color:var(--red)">${esc(e.message)}</span>`; }
   };
   ['f-room', 'f-ci', 'f-co', 'f-guests'].forEach(id => $(id).addEventListener('change', recalc));
+  // 옵션 하루 수량 제한: 그 날짜에 남은 수량까지만 고를 수 있게 (수정 중인 예약 자신의 수량은 빼고 계산)
+  const syncOptLeft = async () => {
+    if (!$('f-ci').value || !$('f-co').value) return;
+    let left;
+    try { left = await api(`/api/bk/option-left?checkin=${$('f-ci').value}&checkout=${$('f-co').value}&exclude=${r.id || ''}`); } catch { return; }
+    box.querySelectorAll('[data-opt]').forEach(sel => {
+      const i = sel.dataset.opt, cur = +sel.value, max = i in left ? Math.min(3, left[i]) : 3;
+      sel.innerHTML = Array.from({ length: Math.max(max, cur) + 1 }, (_, n) => `<option value="${n}" ${n === cur ? 'selected' : ''}>${n}개</option>`).join('');
+      box.querySelector(`[data-optleft="${i}"]`).textContent = i in left ? (left[i] ? `남은 ${left[i]}개` : '마감') : '';
+    });
+  };
+  ['f-ci', 'f-co'].forEach(id => $(id).addEventListener('change', () => setTimeout(syncOptLeft)));
   if (!edit) { $('f-room').addEventListener('change', syncExtra); syncExtra(); box.querySelectorAll('[data-xroom],[data-xguests]').forEach(el => el.addEventListener('change', recalc)); }
   box.querySelectorAll('[data-opt]').forEach(s => s.addEventListener('change', recalc));
   $('f-ci').addEventListener('change', () => { if (!$('f-co').value || $('f-co').value <= $('f-ci').value) $('f-co').value = addDays($('f-ci').value, 1); });
   if (edit) { lastAuto = r.total; $('f-total').value = r.total; }
-  recalc();
+  recalc(); syncOptLeft();
 
   $('f-save').onclick = async (ev, force = false) => {
     $('f-err').textContent = '';

@@ -260,6 +260,7 @@ let INFO = null;
 let viewMonth = null;          // 'YYYY-MM'
 let ci = null, co = null;      // 선택한 입실/퇴실 'YYYY-MM-DD'
 let ROOMS = [];                // 검색 결과
+let OPT_LEFT = {};             // 수량 제한 옵션의 남은 수량 {옵션번호: 개수}
 const picked = {};             // room_id -> { guests, options: {i: qty} }
 let quoteTimer = null, lastQuote = null;
 
@@ -411,7 +412,8 @@ async function searchRooms() {
   $('step-info').hidden = true;
   $('room-list').innerHTML = '<div class="loading">예약 가능한 객실을 찾는 중...</div>';
   try {
-    ROOMS = (await api(`/api/public/search?checkin=${ci}&checkout=${co}`)).rooms;
+    const res = await api(`/api/public/search?checkin=${ci}&checkout=${co}`);
+    ROOMS = res.rooms; OPT_LEFT = res.option_left || {};
   } catch (e) { $('room-list').innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
   const avail = ROOMS.filter(r => r.available).length;
   $('rooms-hint').textContent = `${fmt(ci)} ~ ${fmt(co)} · ${avail}개 객실 예약 가능 (한 번에 최대 ${INFO.maxRooms}개)`;
@@ -452,10 +454,15 @@ function roomOptionsHtml(r, sel) {
   let html = `<div class="room-opts"><div class="opt-row"><span>👥 인원 <small class="hint">(영·유아 포함)</small></span><select data-guests="${r.id}">${guestOpts}</select></div>`;
   INFO.options.forEach(o => {
     const q = sel.options[o.i] || 0;
+    // 남은 수량: 하루 수량 제한에서 다른 손님 예약분과 이번에 다른 객실에서 고른 수량을 뺀 만큼만 고를 수 있음
+    const otherPicked = Object.entries(picked).reduce((a, [id, p]) => a + (id === r.id ? 0 : p.options[o.i] || 0), 0);
+    const max = o.i in OPT_LEFT ? Math.min(3, Math.max(0, OPT_LEFT[o.i] - otherPicked)) : 3;
+    const nums = Array.from({ length: Math.max(max, q) + 1 }, (_, n) => n);
     // 무료 옵션(월광보합 등)은 수량이 정해져 있어 선착순 안내
     const note = o.price ? `${won(o.price)}원` : `<b style="color:var(--ok)">무료</b>${o.limit ? ` · 하루 ${o.limit}대 한정, 먼저 신청한 분 우선` : ''}`;
-    html += `<div class="opt-row"><span>${o.price ? '🔥' : '🎮'} ${esc(o.name)} <small class="hint">${esc(o.detail)} · ${note}</small></span>
-      <select data-opt="${r.id}" data-i="${o.i}">${[0, 1, 2, 3].map(n => `<option value="${n}" ${n === q ? 'selected' : ''}>${n ? n + '개' : '선택 안 함'}</option>`).join('')}</select></div>`;
+    const leftNote = o.i in OPT_LEFT ? ` <b style="color:var(--red)">${max || q ? `남은 ${max}개` : '마감'}</b>` : '';
+    html += `<div class="opt-row"><span>${o.price ? '🔥' : '🎮'} ${esc(o.name)} <small class="hint">${esc(o.detail)} · ${note}${leftNote}</small></span>
+      <select data-opt="${r.id}" data-i="${o.i}" ${nums.length === 1 ? 'disabled' : ''}>${nums.map(n => `<option value="${n}" ${n === q ? 'selected' : ''}>${n ? n + '개' : (nums.length === 1 ? '마감' : '선택 안 함')}</option>`).join('')}</select></div>`;
   });
   return html + '</div>';
 }
@@ -477,7 +484,7 @@ $('room-list').addEventListener('click', e => {
 $('room-list').addEventListener('change', e => {
   const t = e.target;
   if (t.dataset.guests) picked[t.dataset.guests].guests = +t.value;
-  if (t.dataset.opt) picked[t.dataset.opt].options[t.dataset.i] = +t.value;
+  if (t.dataset.opt) { picked[t.dataset.opt].options[t.dataset.i] = +t.value; if (t.dataset.i in OPT_LEFT) renderRooms(); }
   onPickChange();
 });
 
