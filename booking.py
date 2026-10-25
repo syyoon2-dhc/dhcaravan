@@ -333,9 +333,10 @@ def extra_person_fee(room):
 
 
 def paid_options(prices):
-    """유료 옵션 목록 (인덱스 포함)"""
+    """예약 때 고를 수 있는 옵션 목록 (인덱스 포함) — 유료 옵션 + '무료'로 적은 옵션(예: 월광보합, 선착순 수량 제한용)"""
     return [dict(o, i=i, amount=parse_won(o.get('price')))
-            for i, o in enumerate(prices.get('options', [])) if parse_won(o.get('price')) > 0]
+            for i, o in enumerate(prices.get('options', []))
+            if parse_won(o.get('price')) > 0 or '무료' in str(o.get('price', ''))]
 
 
 def day_info(prices, d):
@@ -1203,7 +1204,8 @@ def public_info():
         'maxRooms': settings['maxRooms'], 'refundPolicy': refund_policy_text(settings),
         'customerCancel': bool(settings.get('customerCancel')),
         'notice': settings['notice'], 'today': date.today().isoformat(),
-        'options': [{'i': o['i'], 'name': o['name'], 'detail': o.get('detail', ''), 'price': o['amount']}
+        'options': [{'i': o['i'], 'name': o['name'], 'detail': o.get('detail', ''), 'price': o['amount'],
+                     'limit': (settings.get('optionLimits') or {}).get(str(o['i']), 0)}
                     for o in paid_options(prices)],
     }
 

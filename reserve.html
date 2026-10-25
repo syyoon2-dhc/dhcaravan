@@ -68,6 +68,7 @@
   .day.sale.closed .sn { display:none; }
   .day.closed { background:transparent; cursor:default; } .day.closed .d { color:#c3ccd3 !important; } .day.closed .s { display:none; }
   .day.empty { visibility:hidden; }
+  .day.om:not(.start):not(.end):not(.in) { border-top-color:#cfe0ee; }
   .day.in { background:#d6eaf7; }
   .day.start, .day.end { background:var(--blue); border-color:var(--blue); } .day.start *, .day.end * { color:#fff !important; }
   .day:not(.closed):hover { border-color:var(--blue); }
@@ -298,21 +299,38 @@ document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
 /* ---------- 달력 ---------- */
 let calData = null;
 async function loadCalendar() {
-  $('cal-title').textContent = `${viewMonth.slice(0, 4)}년 ${+viewMonth.slice(5)}월`;
   $('cal-prev').disabled = viewMonth <= monthOf(INFO.today);
   $('cal-next').disabled = viewMonth >= monthOf(INFO.openUntil);
   try {
-    calData = await api(`/api/public/calendar?month=${viewMonth}`);
+    // 다음 달 첫 주들도 이어서 보여 주므로 두 달치를 받음 (월말 입실 → 다음 달 퇴실을 바로 고를 수 있게)
+    const [a, b] = await Promise.all([viewMonth, shiftMonth(viewMonth, 1)].map(m => api(`/api/public/calendar?month=${m}`)));
+    calData = { ...a, days: { ...a.days, ...b.days } };
   } catch (e) { toast('⚠️ ' + e.message); return; }
   renderCalendar();
+}
+
+// 보여 줄 날짜 범위: 지난 주는 빼고(이번 달 1일 또는 오늘이 든 주의 일요일부터),
+// 이번 달 마지막 주 + 다음 달 한 주 더, 최소 5주
+function calRange() {
+  const first = viewMonth + '-01';
+  const from = first > INFO.today ? first : INFO.today;
+  const start = addDays(from, -parse(from).getDay());
+  const lastDay = addDays(shiftMonth(viewMonth, 1) + '-01', -1);
+  let end = addDays(lastDay, 7);
+  end = addDays(end, 6 - parse(end).getDay());
+  if (diffDays(start, end) < 34) end = addDays(start, 34);
+  return [start, end];
 }
 
 function renderCalendar() {
   const box = $('cal');
   let html = [...WD].map(w => `<div class="dow">${w}</div>`).join('');
-  const first = parse(viewMonth + '-01');
-  for (let i = 0; i < first.getDay(); i++) html += '<div class="day empty"></div>';
-  Object.entries(calData.days).forEach(([ds, info]) => {
+  const [start, end] = calRange();
+  const em = monthOf(end);  // 다음 달이 이어 나오면 제목도 '10월 ~ 11월'
+  $('cal-title').textContent = `${viewMonth.slice(0, 4)}년 ${+viewMonth.slice(5)}월` + (em !== viewMonth ? ` ~ ${+em.slice(5)}월` : '');
+  for (let ds = start; ds <= end; ds = addDays(ds, 1)) {
+    const info = calData.days[ds];
+    if (!info) { html += '<div class="day empty"></div>'; continue; }
     const d = parse(ds);
     const n = info.rooms.length;
     // 퇴실일로는 '마감'인 날도 고를 수 있음 (그날 밤은 숙박하지 않으므로)
@@ -328,10 +346,12 @@ function renderCalendar() {
     const onSale = saleIds.length > 0;
     // 할인 날짜: 칸 색을 바꾸고 임시요금 메모(없으면 '할인 중')를 한 줄로
     const saleNote = onSale ? `<span class="sn">🎉 ${esc(saleIds.map(id => info.sale[id].note).find(Boolean) || '할인 중')}</span>` : '';
-    html += `<button class="${cls}${onSale ? ' sale' : ''}" data-d="${ds}" ${closed ? 'disabled' : ''}><span class="d">${d.getDate()}</span><span class="s">${sub}</span>${price}${saleNote}</button>`;
-  });
+    // 달이 바뀌는 1일은 '11/1'처럼 월을 붙여 표시
+    const label = d.getDate() === 1 ? `${d.getMonth() + 1}/${d.getDate()}` : d.getDate();
+    html += `<button class="${cls}${onSale ? ' sale' : ''}${monthOf(ds) !== viewMonth ? ' om' : ''}" data-d="${ds}" ${closed ? 'disabled' : ''}><span class="d">${label}</span><span class="s">${sub}</span>${price}${saleNote}</button>`;
+  }
   box.innerHTML = html;
-  const def = (ci && calData.days[ci]) ? ci : Object.keys(calData.days).find(ds => calData.days[ds].open && calData.days[ds].rooms.length);
+  const def = (ci && calData.days[ci]) ? ci : Object.keys(calData.days).find(ds => ds >= start && calData.days[ds].open && calData.days[ds].rooms.length);
   showDayRooms(def);
 }
 
@@ -432,7 +452,9 @@ function roomOptionsHtml(r, sel) {
   let html = `<div class="room-opts"><div class="opt-row"><span>👥 인원 <small class="hint">(영·유아 포함)</small></span><select data-guests="${r.id}">${guestOpts}</select></div>`;
   INFO.options.forEach(o => {
     const q = sel.options[o.i] || 0;
-    html += `<div class="opt-row"><span>🔥 ${esc(o.name)} <small class="hint">${esc(o.detail)} · ${won(o.price)}원</small></span>
+    // 무료 옵션(월광보합 등)은 수량이 정해져 있어 선착순 안내
+    const note = o.price ? `${won(o.price)}원` : `<b style="color:var(--ok)">무료</b>${o.limit ? ` · 하루 ${o.limit}대 한정, 먼저 신청한 분 우선` : ''}`;
+    html += `<div class="opt-row"><span>${o.price ? '🔥' : '🎮'} ${esc(o.name)} <small class="hint">${esc(o.detail)} · ${note}</small></span>
       <select data-opt="${r.id}" data-i="${o.i}">${[0, 1, 2, 3].map(n => `<option value="${n}" ${n === q ? 'selected' : ''}>${n ? n + '개' : '선택 안 함'}</option>`).join('')}</select></div>`;
   });
   return html + '</div>';
@@ -484,7 +506,7 @@ async function refreshQuote() {
     html += `<tr><td><b>${esc(q.room_name)}</b> · ${q.guests}명</td><td><b>${won(q.total)}원</b></td></tr>`;
     html += `<tr class="sub"><td>객실 요금 (${q.nights.map(n => `${fmt(n.date)} ${won(n.price)}`).join(', ')})</td><td>${won(q.room_amount)}원</td></tr>`;
     if (q.extra_amount) html += `<tr class="sub"><td>인원 추가 ${q.extra_guests}명 × ${q.nights.length}박</td><td>${won(q.extra_amount)}원</td></tr>`;
-    q.options.forEach(o => { html += `<tr class="sub"><td>${esc(o.name)} ${esc(o.detail)} × ${o.qty}</td><td>${won(o.price * o.qty)}원</td></tr>`; });
+    q.options.forEach(o => { html += `<tr class="sub"><td>${esc(o.name)} ${esc(o.detail)} × ${o.qty}</td><td>${o.price ? won(o.price * o.qty) + '원' : '무료'}</td></tr>`; });
   });
   html += `<tr class="tot"><td>총 결제 금액</td><td>${won(lastQuote.total)}원</td></tr>`;
   $('sum-table').innerHTML = html;

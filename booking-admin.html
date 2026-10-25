@@ -839,12 +839,12 @@ async function openDay(ds) {
       <div class="dy-cards">${g.rows.map(r => `<div class="dy-card" data-id="${r.id}"><div class="top-line">${statusTag(r)} <b>${esc(r.name)}</b>
           ${r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone_fmt)}</a>` : ''}</div>
         ${fmt(r.checkin)}~${fmt(r.checkout)} ${r.nights}박${r.status === 'block' ? '' : ` · ${r.guests}명 · ${won(r.total)}원${r.total - r.paid > 0 ? ` <b style="color:var(--red)">(미입금 ${won(r.total - r.paid)})</b>` : ''}`}
-        ${r.options.length ? `<br><small>${r.options.map(o => `${esc(o.name)}×${o.qty}`).join(', ')}</small>` : ''}
+        ${r.options.length ? `<br><small>${r.options.map(o => `${esc(o.name)} ${esc(o.detail)} ×${o.qty}`).join(', ')}</small>` : ''}
         ${r.memo ? `<br><small><b>메모</b> ${esc(r.memo)}</small>` : ''}${r.request ? `<br><small><b>요청</b> ${esc(r.request)}</small>` : ''}</div>`).join('')}</div>
       <div class="tbl-wrap dy-wrap"><table class="list dy-table"><thead><tr><th>No</th><th>상태</th><th>이용자명</th><th>연락처</th><th>인원</th><th>옵션</th><th>예약일자</th><th>예약금액</th><th>입금</th><th>결제</th></tr></thead><tbody>` +
         g.rows.map(r => `<tr class="click" data-id="${r.id}"><td>${++n}</td><td>${statusTag(r)}</td><td class="nw"><b>${esc(r.name)}</b></td>
           <td class="nw">${r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone_fmt)}</a>` : '-'}</td><td>${r.status === 'block' ? '-' : r.guests + '명'}</td>
-          <td class="l"><small>${r.options.map(o => `${esc(o.name)}×${o.qty}`).join(', ') || '-'}</small></td>
+          <td class="l" style="min-width:130px"><small>${r.options.map(o => `${esc(o.name)} ${esc(o.detail)} ×${o.qty}`).join(', ') || '-'}</small></td>
           <td class="nw">${fmt(r.checkin)}~${fmt(r.checkout)} <small class="hint">${r.nights}박</small></td>
           <td class="num">${won(r.total)}</td><td class="num">${r.total - r.paid > 0 && r.status !== 'block' ? `<b style="color:var(--red)">${won(r.paid)}</b>` : won(r.paid)}</td><td class="nw"><small>${esc(r.pay_method)}</small></td></tr>` +
           (r.memo || r.request ? `<tr data-id="${r.id}" class="click"><td colspan="10" class="l"><small>${r.memo ? `<b>관리메모 :</b> ${esc(r.memo)}` : ''}${r.memo && r.request ? ' &nbsp;·&nbsp; ' : ''}${r.request ? `<b>요청 :</b> ${esc(r.request)}` : ''}</small></td></tr>` : '')).join('') +
@@ -1323,7 +1323,7 @@ async function openDetail(id) {
   try { data = await api('/api/bk/reservation?id=' + id); } catch (e) { toast('⚠️ ' + e.message); return; }
   const r = data.item, group = data.group;
   const same = group.filter(g => g.status === r.status);
-  const opts = r.options.map(o => `${esc(o.name)} ${esc(o.detail)} × ${o.qty} (${won(o.price * o.qty)}원)`).join('<br>') || '-';
+  const opts = r.options.map(o => `${esc(o.name)} ${esc(o.detail)} × ${o.qty} (${o.price ? won(o.price * o.qty) + '원' : '무료'})`).join('<br>') || '-';
   let html = `<button class="modal-x">✕</button>
     <h3>${r.status === 'block' ? '⛔ 예약막음' : esc(r.name) + '님 예약'} ${statusTag(r)} ${refundTag(r)}</h3>`;
   if (group.length > 1) html += `<div class="group-note">🔗 한 번에 예약한 객실 ${group.length}개 (예약번호 ${esc(r.group_code)}): ${group.map(g => `${esc(roomName(g.room_id))} ${g.status_label}`).join(', ')}<br>입금확인 · 취소는 같은 상태인 ${same.length}개 객실에 함께 적용됩니다.</div>`;
@@ -1448,7 +1448,7 @@ function openForm(r) {
       <div class="f nb"><label>인원</label><input type="number" id="f-guests" min="1" value="${r.guests || ''}"></div>
       <div class="f nb"><label>예약 경로</label><select id="f-source">${META.sources.map(s => `<option ${s === (r.source || '전화') ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
       <div class="f nb"><label>결제구분</label><select id="f-pay">${META.payMethods.map(s => `<option ${s === (r.pay_method || '무통장') ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
-      ${META.options.map(o => `<div class="f nb"><label>${esc(o.name)} ${esc(o.detail)} (${won(o.price)}원)</label><select data-opt="${o.i}">${[0, 1, 2, 3].map(n => `<option value="${n}" ${n === optQty(o.i) ? 'selected' : ''}>${n}개</option>`).join('')}</select></div>`).join('')}
+      ${META.options.map(o => `<div class="f nb"><label>${esc(o.name)} ${esc(o.detail)} (${o.price ? won(o.price) + '원' : '무료'})</label><select data-opt="${o.i}">${[0, 1, 2, 3].map(n => `<option value="${n}" ${n === optQty(o.i) ? 'selected' : ''}>${n}개</option>`).join('')}</select></div>`).join('')}
       <div class="f full nb"><div class="money-box" id="f-quote">객실 · 날짜 · 인원을 입력하면 요금이 자동 계산됩니다.</div></div>
       <div class="f nb"><label>결제금액 (할인 시 직접 수정${edit ? '' : ' · 첫 객실'})</label><input type="number" id="f-total" value="${edit ? r.total : ''}"></div>
       <div class="f nb"><label>입금액</label><input type="number" id="f-paid" value="${edit ? r.paid : ''}" placeholder="${edit ? '' : '확정이면 비워도 결제금액으로 처리'}"></div>
