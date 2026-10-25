@@ -818,6 +818,7 @@ async function openDay(ds) {
       <input id="dy-q" placeholder="이름 · 연락처 검색" style="width:150px">
       <span class="grow"></span>
       <button class="btn line sm" id="dy-sms" type="button">✉️ 문자발송</button>
+      <button class="btn line sm" id="dy-share" type="button">💬 카톡공유</button>
       <button class="btn line sm" id="dy-print" type="button">🖨 프린트</button>
     </div>
     <div id="dy-body"></div>`;
@@ -877,6 +878,27 @@ async function openDay(ds) {
     const ids = shown().filter(r => r.status !== 'block' && r.phone).map(r => r.id);
     if (!ids.length) return toast('문자 보낼 예약이 없습니다');
     openBulkSms(ids);
+  };
+  // 휴대폰: 공유 창(카카오톡 선택)으로 보내기 · 공유가 안 되는 PC 등은 글을 복사해서 카톡에 붙여넣기
+  $('dy-share').onclick = async () => {
+    const list = shown();
+    if (!list.length) return toast('보낼 예약이 없습니다');
+    const lines = [`📋 예약자정보 ${title}`];
+    META.rooms.forEach(room => list.filter(r => r.room_id === room.id).forEach(r => {
+      if (r.status === 'block') { lines.push('', `▪ ${room.name} — 예약불가${r.memo ? ` (${r.memo})` : ''}`); return; }
+      lines.push('', `▪ ${room.name} [${r.status_label}]`, `${r.name} ${r.phone_fmt || ''} · ${r.guests}명`,
+        `${fmt(r.checkin)}~${fmt(r.checkout)} ${r.nights}박`);
+      if (r.options.length) lines.push('옵션: ' + r.options.map(o => `${o.name} ${o.detail} ×${o.qty}`).join(', '));
+      if (r.memo) lines.push('메모: ' + r.memo);
+      if (r.request) lines.push('요청: ' + r.request);
+    }));
+    const text = lines.join('\n');
+    if (navigator.share) {
+      try { await navigator.share({ text }); } catch (e) { if (e.name !== 'AbortError') toast('⚠️ 공유 실패: ' + e.message); }
+      return;
+    }
+    try { await navigator.clipboard.writeText(text); toast('복사했습니다. 카카오톡 대화창에 붙여넣기 하세요'); }
+    catch { prompt('아래 글을 복사해서 카카오톡에 붙여넣기 하세요', text); }
   };
   $('dy-print').onclick = () => {
     const w = window.open('', '_blank');
