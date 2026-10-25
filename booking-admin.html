@@ -821,6 +821,11 @@ async function openDay(ds) {
       <button class="btn line sm" id="dy-share" type="button">💬 카톡공유</button>
       <button class="btn line sm" id="dy-print" type="button">🖨 프린트</button>
     </div>
+    <div class="row" id="dy-share-pick" hidden style="justify-content:flex-end;gap:6px;margin:-4px 0 10px">
+      <small class="hint">카톡으로 보낼 형식</small>
+      <button class="btn sm" id="dy-share-img" type="button">🖼 이미지</button>
+      <button class="btn line sm" id="dy-share-txt" type="button">📝 글</button>
+    </div>
     <div id="dy-body"></div>`;
   modal.hidden = false;
   const shown = () => {
@@ -879,8 +884,24 @@ async function openDay(ds) {
     if (!ids.length) return toast('문자 보낼 예약이 없습니다');
     openBulkSms(ids);
   };
-  // 휴대폰: 공유 창(카카오톡 선택)으로 보내기 · 공유가 안 되는 PC 등은 글을 복사해서 카톡에 붙여넣기
-  $('dy-share').onclick = async () => {
+  // 카톡공유: 이미지(출력 화면처럼) 또는 글 — 휴대폰은 공유 창에서 카카오톡 선택
+  $('dy-share').onclick = () => { $('dy-share-pick').hidden = !$('dy-share-pick').hidden; };
+  $('dy-share-img').onclick = async () => {
+    const list = shown();
+    if (!list.length) return toast('보낼 예약이 없습니다');
+    const blob = await dayImage(list, title);
+    const file = new File([blob], `예약자정보_${ds}.png`, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file] }); } catch (e) { if (e.name !== 'AbortError') toast('⚠️ 공유 실패: ' + e.message); }
+      return;
+    }
+    // 공유가 안 되는 PC: 이미지 파일로 내려받기 (카톡 PC에 끌어다 놓기)
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('이미지를 내려받았습니다. 카카오톡 대화창에 끌어다 놓으세요');
+  };
+  $('dy-share-txt').onclick = async () => {
     const list = shown();
     if (!list.length) return toast('보낼 예약이 없습니다');
     const lines = [`📋 예약자정보 ${title}`];
@@ -911,6 +932,80 @@ async function openDay(ds) {
     w.document.close(); w.focus(); w.print();
   };
   render();
+}
+
+// 날짜별 예약자정보를 카톡 공유용 PNG 이미지로 그림 (금액 제외)
+async function dayImage(list, title) {
+  const W = 720, S = 2, PAD = 24, font = getComputedStyle(document.body).fontFamily;
+  const c = document.createElement('canvas'), g = c.getContext('2d');
+  const F = (size, bold) => `${bold ? 700 : 400} ${size}px ${font}`;
+  // 글자 단위 줄바꿈 (한글은 띄어쓰기 없이도 줄이 넘치지 않게)
+  const wrap = (text, size, bold, maxW) => {
+    g.font = F(size, bold);
+    const out = []; let line = '';
+    for (const ch of String(text)) {
+      if (g.measureText(line + ch).width > maxW && line) { out.push(line); line = ch.trim() ? ch : ''; } else line += ch;
+    }
+    return line ? out.concat(line) : out;
+  };
+  // 그릴 내용: [종류, 값] 목록을 먼저 만들고 높이를 계산한 뒤 그림
+  const ops = [];
+  const people = list.filter(r => r.status !== 'block').reduce((a, r) => a + r.guests, 0);
+  META.rooms.forEach(room => {
+    const rows = list.filter(r => r.room_id === room.id);
+    if (!rows.length) return;
+    ops.push(['room', room.name]);
+    rows.forEach(r => {
+      const lines = [];
+      if (r.status === 'block') lines.push(['예약불가' + (r.memo ? ` · ${r.memo}` : ''), 15, true, '#c53030']);
+      else {
+        lines.push([`${r.name}   ${r.phone_fmt || ''}   ${r.guests}명`, 16, true, '#1a202c']);
+        lines.push([`${fmt(r.checkin)} ~ ${fmt(r.checkout)}  ${r.nights}박`, 14.5, false, '#2d3748']);
+        if (r.options.length) lines.push(['옵션: ' + r.options.map(o => `${o.name} ${o.detail} ×${o.qty}`).join(', '), 14, false, '#2b6cb0']);
+        if (r.memo) lines.push(['메모: ' + r.memo, 14, false, '#4a5568']);
+        if (r.request) lines.push(['요청: ' + r.request, 14, false, '#4a5568']);
+      }
+      ops.push(['res', r, lines.flatMap(([t, size, bold, color]) => wrap(t, size, bold, W - PAD * 2 - 110).map(l => [l, size, bold, color]))]);
+    });
+  });
+  const lineH = size => Math.round(size * 1.55);
+  let H = 92 + PAD;
+  ops.forEach(([k, , lines]) => { H += k === 'room' ? 44 : lines.reduce((a, [, size]) => a + lineH(size), 0) + 20; });
+  if (!ops.length) H += 40;
+  c.width = W * S; c.height = H * S; g.scale(S, S);
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  g.textBaseline = 'middle';
+  // 제목
+  g.fillStyle = '#0b6aa8'; g.fillRect(0, 0, W, 72);
+  g.fillStyle = '#fff'; g.font = F(22, true); g.fillText('예약자정보 확인', PAD, 28);
+  g.font = F(15, false); g.fillText(`예약일자 ${title}  ·  예약 ${list.filter(r => r.status !== 'block').length}건 · ${people}명`, PAD, 54);
+  let y = 92;
+  if (!ops.length) { g.fillStyle = '#718096'; g.font = F(15); g.fillText('이 날 예약이 없습니다', PAD, y + 10); }
+  const ST = { confirmed: ['#e6f6ec', '#276749'], pending: ['#fff7e0', '#b7791f'], block: ['#edf2f7', '#4a5568'] };
+  ops.forEach(([k, v, lines]) => {
+    if (k === 'room') {
+      g.fillStyle = '#f1f5f9'; g.fillRect(PAD - 8, y, W - PAD * 2 + 16, 34);
+      g.fillStyle = '#1a202c'; g.font = F(16, true); g.fillText('▪ ' + v, PAD, y + 17);
+      y += 44; return;
+    }
+    const r = v;
+    // 상태 표시 (예약확정 · 입금대기 등)
+    const label = r.status === 'confirmed' && r.checkout <= TODAY ? '이용완료' : r.status_label;
+    const [bg, fg] = ST[r.status] || ST.block;
+    g.font = F(13, true);
+    const bw = g.measureText(label).width + 18;
+    g.fillStyle = bg; g.beginPath(); g.roundRect ? g.roundRect(PAD, y + 2, bw, 24, 12) : g.rect(PAD, y + 2, bw, 24); g.fill();
+    g.fillStyle = fg; g.fillText(label, PAD + 9, y + 14);
+    lines.forEach(([t, size, bold, color]) => {
+      const h = lineH(size);
+      g.fillStyle = color; g.font = F(size, bold); g.fillText(t, PAD + 110, y + h / 2);
+      y += h;
+    });
+    y += 10;
+    g.strokeStyle = '#e2e8f0'; g.beginPath(); g.moveTo(PAD, y); g.lineTo(W - PAD, y); g.stroke();
+    y += 10;
+  });
+  return new Promise(res => c.toBlob(res, 'image/png'));
 }
 
 function renderGrid(items, first, last) {
