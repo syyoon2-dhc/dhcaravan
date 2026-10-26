@@ -54,6 +54,7 @@ DEFAULT_SETTINGS = {
     'refundRules': [{'days': 6, 'rate': 100}, {'days': 5, 'rate': 90}, {'days': 4, 'rate': 80},  # 이용일 N일 전 이상 취소 → 환불 %
                     {'days': 3, 'rate': 70}, {'days': 2, 'rate': 50}, {'days': 1, 'rate': 30}, {'days': 0, 'rate': 0}],
     'nearDepositHours': 1,         # 입실 1일 전 · 당일 예약은 입금 기한 (시간)
+    'nightDeposit': {'enabled': True, 'start': 21, 'end': 8},  # 밤 21시 ~ 아침 8시는 입금 기한 시간에서 뺌
     'depositReminderMinutes': 60,  # 입금 마감 N분 전 안내 문자
     'twoNight': {'enabled': True, 'weekdays': [4, 5], 'releaseDays': 7},  # 금(4)·토(5) 입실은 2박, 입실 7일 전부터 1박 허용
     'optionLimits': {},            # 옵션별 하루 최대 수량 {"1": 3} (옵션 번호: 수량)
@@ -93,6 +94,8 @@ DEFAULT_SETTINGS = {
         'admin_cancel': '↩️ 손님 직접 취소\n{이름} {연락처}\n{입실} ~ {퇴실} ({박}박)\n{객실상세}\n합계 {금액}원\n'
                         '환불할 금액 {환불}원\n환불계좌: {환불계좌}\n예약번호 {예약번호}',
         'admin_expired': '⏰ 미입금 자동취소\n{이름} {연락처}\n{입실} ~ {퇴실} ({박}박)\n{객실상세}\n합계 {금액}원\n예약번호 {예약번호}',
+        'admin_paid': '💰 입금 확인 (예약확정)\n{이름} {연락처}\n{입실} ~ {퇴실} ({박}박)\n{객실상세}\n합계 {금액}원\n'
+                      '입금액 {입금액}원 ({결제방법})\n잔금 {잔금}원\n예약번호 {예약번호}',
     },
 }
 
@@ -253,6 +256,9 @@ def save_settings(data):
             continue
     s['refundRules'] = [{'days': d, 'rate': rules[d]} for d in sorted(rules, reverse=True)]
     s['nearDepositHours'] = max(1, int(s.get('nearDepositHours') or 1))
+    nd = s.get('nightDeposit') or {}
+    hour = lambda v, d: min(23, max(0, int(d if v in (None, '') else v)))
+    s['nightDeposit'] = {'enabled': bool(nd.get('enabled')), 'start': hour(nd.get('start'), 21), 'end': hour(nd.get('end'), 8)}
     s['depositReminderMinutes'] = max(0, int(s.get('depositReminderMinutes') or 0))
     s['autoBlockCancels'] = max(0, int(s.get('autoBlockCancels') or 0))
     tn = s.get('twoNight') or {}
@@ -585,16 +591,41 @@ def _insert(q, status, source, deadline, name, phone, request, memo, total, paid
 
 
 def deposit_deadline(settings, checkin, hours=None):
-    """입금 기한: 기본 N시간 / 입실 1일 전 · 당일 예약은 1시간 / 입실일 자정을 넘으면 입실 전날 23:59"""
+    """입금 기한: 기본 N시간 / 입실 1일 전 · 당일 예약은 1시간 / 입실일 자정을 넘으면 입실 전날 23:59
+    밤 시간(기본 21시 ~ 아침 8시)은 시간에서 뺌 (사장님이 밤에는 입금 확인을 못 하므로)
+    예: 3시간 기한 — 20:50 예약 → 21시까지 10분 + 다음날 8시부터 2시간 50분 = 다음날 10:50, 밤 예약 → 다음날 11:00"""
     now = datetime.now()
     ci = date.fromisoformat(checkin)
     if hours is None:
         hours = settings['nearDepositHours'] if (ci - now.date()).days <= 1 else settings['depositHours']
-    deadline = now + timedelta(hours=int(hours))
+    deadline = add_day_hours(settings, now, int(hours))
     cap = datetime.combine(ci, datetime.min.time()) - timedelta(minutes=1)
+    if deadline != now + timedelta(hours=int(hours)):  # 밤을 건너뛴 기한은 입실일 낮 12시까지 허용 (입실 전날 밤 예약도 아침에 입금)
+        cap = datetime.combine(ci, datetime.min.time()) + timedelta(hours=12)
     if cap > now + timedelta(minutes=30):
         deadline = min(deadline, cap)
     return deadline.strftime('%Y-%m-%d %H:%M:%S')
+
+
+def add_day_hours(settings, now, hours):
+    """now 부터 hours 시간 뒤 — 밤 시간(nightDeposit start ~ 다음날 end)은 세지 않음"""
+    nd = settings.get('nightDeposit') or {}
+    a, b = int(nd.get('start', 21)), int(nd.get('end', 8))
+    if not nd.get('enabled') or a <= b:
+        return now + timedelta(hours=hours)
+    t, left = now, timedelta(hours=hours)
+    while True:
+        morning = t.replace(hour=b, minute=0, second=0, microsecond=0)
+        night = t.replace(hour=a, minute=0, second=0, microsecond=0)
+        if t < morning:          # 새벽 → 그날 아침부터
+            t = morning
+        elif t >= night:         # 밤 → 다음날 아침부터
+            t = morning + timedelta(days=1)
+            continue
+        if t + left <= night:
+            return t + left
+        left -= night - t
+        t = morning + timedelta(days=1)
 
 
 def check_two_night(settings, checkin, checkout):
@@ -886,6 +917,8 @@ def set_status(rid, status, data=None):
         rows = [get_reservation(t['id']) for t in targets]
     if data.get('sms') and status in ('confirmed', 'cancelled') and rows[0]['phone']:
         notify(status, rows, force=True)
+    if status == 'confirmed' and r['status'] == 'pending':  # 입금대기 → 확정: 사장님 텔레그램에 입금확인 알림
+        notify('admin_paid', rows)
     return rows
 
 
@@ -1222,6 +1255,7 @@ def public_info():
     return {
         'open': bool(settings.get('bookingOpen')) and bool(settings.get('bank')),
         'phone': settings['phone'], 'depositHours': settings['depositHours'],
+        'nightDeposit': settings['nightDeposit'],
         'openUntil': open_until(settings).isoformat(), 'maxNights': settings['maxNights'],
         'nextOpen': next_open_text(settings),
         'maxRooms': settings['maxRooms'], 'refundPolicy': refund_policy_text(settings),
@@ -1267,6 +1301,7 @@ def render_template(tpl, rows, settings=None, drop_empty=False):
         '인원': sum(x['guests'] for x in rows),
         '금액': f"{sum(x['total'] for x in rows):,}", '잔금': f"{sum(x['total'] - x['paid'] for x in rows):,}",
         '환불': f"{sum(x['refund'] for x in rows):,}",
+        '입금액': f"{sum(x['paid'] for x in rows):,}", '결제방법': r.get('pay_method') or '',
         '계좌': settings.get('bankShort') or settings['bank'], '입금기한': fmt_deadline(r.get('deadline')),
         '펜션전화': settings['phone'],
     }
@@ -1385,7 +1420,7 @@ def admin_detail_text(kind, rows, settings):
     names = {r['id']: r['name'] for r in load_prices()['rooms']}
     r = rows[0]
     title = {'admin': '🔔 새 예약 (입금대기)', 'admin_cancel': '↩️ 손님 직접 취소',
-             'admin_expired': '⏰ 미입금 자동취소'}.get(kind, '알림')
+             'admin_expired': '⏰ 미입금 자동취소', 'admin_paid': '💰 입금 확인 (예약확정)'}.get(kind, '알림')
     lines = [title, f'{mask_name(r["name"])} (끝번호 {r["phone"][-4:] or "-"})', f'{fmt_day(r["checkin"])} ~ {fmt_day(r["checkout"])} ({r["nights"]}박)']
     for x in rows:
         opts = ', '.join(f'{o["name"]} {o.get("detail", "")} x{o["qty"]}' for o in x['options'])
@@ -1414,7 +1449,7 @@ def notify(kind, rows, force=False):
             threading.Thread(target=send_telegram, args=(admin_detail_text(kind, rows, settings), kind, rows[0]['id']),
                              daemon=True).start()
             return
-        if kind == 'admin_expired':  # 자동취소 알림은 텔레그램일 때만 (문자비 절약)
+        if kind in ('admin_expired', 'admin_paid'):  # 자동취소 · 입금확인 알림은 텔레그램일 때만 (문자비 절약)
             return
     elif not settings['auto'].get(kind, True):
         return
@@ -1422,7 +1457,7 @@ def notify(kind, rows, force=False):
     if not tpl.strip():
         return
     msg = render_template(tpl, rows, settings)
-    phone = settings['adminPhone'] if kind == 'admin' else rows[0]['phone']
+    phone = settings['adminPhone'] if kind.startswith('admin') else rows[0]['phone']
     threading.Thread(target=send_sms, args=(phone, msg, kind, rows[0]['id']), daemon=True).start()
 
 
@@ -2169,7 +2204,7 @@ def handle_admin(method, path, query, body):
             ok, result = send_sms(body.get('phone'), msg, 'manual', body.get('reservation_id'))
             return (200 if ok else 400), ({'ok': True, 'result': result} if ok else {'error': result})
         if path == '/api/bk/telegram/test':
-            ok, result = send_telegram('✅ 동해카라반펜션 예약 알림이 연결되었습니다.\n새 예약 · 손님 취소 · 미입금 자동취소를 여기로 알려드립니다.', 'test')
+            ok, result = send_telegram('✅ 동해카라반펜션 예약 알림이 연결되었습니다.\n새 예약 · 입금 확인 · 손님 취소 · 미입금 자동취소를 여기로 알려드립니다.', 'test')
             return (200, {'ok': True}) if ok else (400, {'error': result})
         if path == '/api/bk/sms/preview':
             with _lock:

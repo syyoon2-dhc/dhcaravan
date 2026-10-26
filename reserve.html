@@ -203,7 +203,7 @@
 
         <div class="step-h" style="margin-top:20px"><span class="no">4</span>결제 금액 확인</div>
         <table class="sum-table" id="sum-table"></table>
-        <p class="hint" style="margin:8px 0 16px">결제는 <b>무통장입금</b>입니다. 예약 후 <b id="dep-hours"></b>시간 안에 입금해 주셔야 예약이 확정되며, 기한 내 미입금 시 자동 취소됩니다.</p>
+        <p class="hint" style="margin:8px 0 16px">결제는 <b>무통장입금</b>입니다. 예약 후 <b id="dep-hours"></b>시간 안에 입금해 주셔야 예약이 확정되며<span id="dep-night"></span>, 기한 내 미입금 시 자동 취소됩니다.</p>
 
         <div class="policy">
           <label class="agree"><input type="checkbox" id="ag-notice"> 이용 안내를 확인했습니다 (필수)</label>
@@ -651,6 +651,8 @@ function showCancel(r) {
   $('notice-text').textContent = INFO.notice;
   $('refund-text').textContent = INFO.refundPolicy;
   $('dep-hours').textContent = INFO.depositHours;
+  const nd = INFO.nightDeposit || {};
+  $('dep-night').textContent = nd.enabled && nd.start !== nd.end ? ` (밤 ${nd.start}시 ~ 아침 ${nd.end}시는 시간에서 빠집니다)` : '';
   viewMonth = monthOf(INFO.today);
   loadCalendar();
 })();

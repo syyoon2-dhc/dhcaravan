@@ -489,6 +489,10 @@
         </div>
         <div class="f"><label>입실 1일 전 · 당일 예약의 입금 기한 (시간)</label><input type="number" id="r-near" min="1">
           <p class="hint">입금 기한이 입실일 자정을 넘으면 입실 전날 23:59로 자동 조정됩니다.</p></div>
+        <div class="f"><label><span class="chk"><input type="checkbox" id="r-night"> 밤 시간은 입금 기한에서 빼기</span></label>
+          <div style="display:flex;gap:6px;align-items:center"><input type="number" id="r-night-start" min="0" max="23" style="width:70px">시 ~ 다음날
+            <input type="number" id="r-night-end" min="0" max="23" style="width:70px">시</div>
+          <p class="hint">예: 21시 ~ 8시, 입금 기한 3시간 → 저녁 8:50 예약은 다음날 10:50, 밤 10시 예약은 다음날 11:00까지 입금. 밤을 넘긴 기한은 입실일 낮 12시까지 허용됩니다.</p></div>
         <div class="f"><label>입금 마감 몇 분 전에 안내 문자 (0 = 안 보냄)</label><input type="number" id="r-remind-min" min="0"></div>
         <div class="f"><label>예약제재: 연속 몇 회 취소 시 자동 '예약불가' (0 = 사용 안 함)</label><input type="number" id="r-autoblock" min="0"></div>
       </div>
@@ -533,7 +537,7 @@
         <div class="f"><label>알리고 아이디</label><input id="a-user" autocomplete="off"></div>
         <div class="f"><label>발신번호 (알리고에 등록된 번호)</label><input id="a-sender"></div>
         <div class="f"><label>새 예약 · 손님 취소 알림 받을 번호</label><input id="s-admin-phone"></div>
-        <div class="f"><label class="chk"><input type="checkbox" id="s-admin-notify"> 새 예약 · 손님 취소 시 나에게 문자</label><label style="margin-top:6px">입실 전날 안내 문자 시각</label><select id="s-remind"></select></div>
+        <div class="f"><label class="chk"><input type="checkbox" id="s-admin-notify"> 새 예약 · 손님 취소 시 나에게 알림 (텔레그램, 꺼져 있으면 문자)</label><label style="margin-top:6px">입실 전날 안내 문자 시각</label><select id="s-remind"></select></div>
       </div>
       <div class="row" style="margin-top:10px">
         <button class="btn line" id="a-balance">잔여 건수 확인</button>
@@ -546,13 +550,13 @@
       <h2>📨 사장님 알림 — 텔레그램 (무료)</h2>
       <div class="set-grid">
         <div class="f"><label class="chk"><input type="checkbox" id="t-enabled"> <span>사장님 알림을 <b>문자 대신 텔레그램</b>으로 받기</span></label>
-          <p class="hint" style="margin-top:6px">새 예약 · 손님 직접 취소 · 미입금 자동취소를 자세한 내용(객실 · 옵션 · 요청사항 · 환불계좌)과 함께 보냅니다. 문자비 없음.</p></div>
+          <p class="hint" style="margin-top:6px">새 예약 · 입금 확인 · 손님 직접 취소 · 미입금 자동취소를 자세한 내용(객실 · 옵션 · 요청사항 · 환불계좌)과 함께 보냅니다. 문자비 없음.</p></div>
         <div class="f"><label>봇 토큰 (BotFather 가 알려준 값)</label><input id="t-token" autocomplete="off" placeholder="123456789:AA..."></div>
         <div class="f"><label>채팅 ID</label><div class="row"><input id="t-chat" class="grow" placeholder="[채팅 ID 찾기]로 자동 입력"><button class="btn line sm" id="t-find" type="button">채팅 ID 찾기</button></div></div>
       </div>
       <div class="row" style="margin-top:10px"><button class="btn line" id="t-test" type="button">테스트 메시지 보내기</button><span class="hint" id="t-result"></span></div>
       <h3 style="margin:16px 0 6px;font-size:15px">📝 내가 받는 알림 문구</h3>
-      <p class="vars" style="margin-bottom:8px">쓸 수 있는 항목: <code>{이름}</code> <code>{연락처}</code> <code>{객실}</code> <code>{객실상세}</code> <code>{입실}</code> <code>{퇴실}</code> <code>{박}</code> <code>{인원}</code> <code>{금액}</code> <code>{잔금}</code> <code>{옵션}</code> <code>{요청사항}</code> <code>{메모}</code> <code>{예약경로}</code> <code>{입금기한}</code> <code>{환불}</code> <code>{환불계좌}</code> <code>{예약번호}</code><br>
+      <p class="vars" style="margin-bottom:8px">쓸 수 있는 항목: <code>{이름}</code> <code>{연락처}</code> <code>{객실}</code> <code>{객실상세}</code> <code>{입실}</code> <code>{퇴실}</code> <code>{박}</code> <code>{인원}</code> <code>{금액}</code> <code>{잔금}</code> <code>{옵션}</code> <code>{요청사항}</code> <code>{메모}</code> <code>{예약경로}</code> <code>{입금기한}</code> <code>{환불}</code> <code>{환불계좌}</code> <code>{입금액}</code> <code>{결제방법}</code> <code>{예약번호}</code><br>
         · 줄을 추가 · 삭제해서 원하는 내용만 받으세요. 값이 비어 있는 항목(예: 요청사항이 없는 예약)이 든 줄은 자동으로 빠집니다. <code>{객실상세}</code> = 객실마다 "객실 인원 금액 (옵션)" 한 줄씩.</p>
       <div class="set-grid" id="t-templates"></div>
       <p class="hint" style="margin-top:8px">
@@ -1399,7 +1403,7 @@ function openCustSms(phones, category, all) {
 }
 
 /* =============== 문자 =============== */
-const KIND_LABEL = { ...TEMPLATE_LABEL, manual: '직접 발송', customer: '고객 문자', admin_expired: '미입금 자동취소 알림 (사장님)', test: '텔레그램 테스트' };
+const KIND_LABEL = { ...TEMPLATE_LABEL, manual: '직접 발송', customer: '고객 문자', admin_expired: '미입금 자동취소 알림 (사장님)', admin_paid: '입금확인 알림 (사장님)', test: '텔레그램 테스트' };
 async function loadSms() {
   let items;
   try { items = (await api('/api/bk/sms/log')).items; } catch (e) { toast('⚠️ ' + e.message); return; }
@@ -1677,6 +1681,7 @@ async function loadSettings(group) {
   const tn = s.twoNight || {};
   $('r-2n').checked = !!tn.enabled; $('r-2n-release').value = tn.releaseDays ?? 7;
   $('r-2n-days').innerHTML = [6, 0, 1, 2, 3, 4, 5].map(w => `<label class="chk"><input type="checkbox" data-wd="${w}" ${(tn.weekdays || []).includes(w) ? 'checked' : ''}> ${'월화수목금토일'[w]}</label>`).join(' ');
+  const nd = s.nightDeposit || {}; $('r-night').checked = !!nd.enabled; $('r-night-start').value = nd.start ?? 21; $('r-night-end').value = nd.end ?? 8;
   $('r-near').value = s.nearDepositHours; $('r-remind-min').value = s.depositReminderMinutes; $('r-autoblock').value = s.autoBlockCancels;
   $('r-optlimits').innerHTML = META.options.map(o => `<div class="f"><label>${esc(o.name)} ${esc(o.detail)}</label><input type="number" min="0" data-optlimit="${o.i}" value="${(s.optionLimits || {})[o.i] || ''}" placeholder="제한 없음"></div>`).join('');
   $('s-open').checked = !!s.bookingOpen; $('s-bank').value = s.bank; $('s-bank-short').value = s.bankShort || ''; $('s-hours').value = s.depositHours;
@@ -1698,7 +1703,7 @@ async function loadSettings(group) {
   $('s-admin-phone').value = s.adminPhone; $('s-admin-notify').checked = !!s.adminNotify;
   const tg = s.telegram || {};
   $('t-enabled').checked = !!tg.enabled; $('t-token').value = tg.botToken || ''; $('t-chat').value = tg.chatId || '';
-  const TG_LABEL = { admin: '🔔 새 예약', admin_cancel: '↩️ 손님 직접 취소', admin_expired: '⏰ 미입금 자동취소' };
+  const TG_LABEL = { admin: '🔔 새 예약', admin_cancel: '↩️ 손님 직접 취소', admin_expired: '⏰ 미입금 자동취소', admin_paid: '💰 입금 확인 (예약확정)' };
   const tgt = s.tgTemplates || {}, tgd = META.tgTemplateDefaults || {};
   $('t-templates').innerHTML = Object.entries(TG_LABEL).map(([k, label]) => `<div class="f"><label>${label} <button type="button" class="btn gray sm" data-tg-reset="${k}" style="margin-left:6px">기본 문구로</button></label>
     <textarea data-tgtpl="${k}" rows="9">${esc(tgt[k] || tgd[k] || '')}</textarea></div>`).join('');
@@ -1779,6 +1784,7 @@ $('s-save').onclick = async () => {
     templates, auto, smsPrice: +$('s-sms-price').value || 0, lmsPrice: +$('s-lms-price').value || 0,
     monthlyFixedCost: +$('s-fixed').value || 0, compareFeeRate: +$('s-fee').value || 0,
     twoNight: { enabled: $('r-2n').checked, releaseDays: +$('r-2n-release').value || 0, weekdays: [...document.querySelectorAll('[data-wd]:checked')].map(c => +c.dataset.wd) },
+    nightDeposit: { enabled: $('r-night').checked, start: +$('r-night-start').value, end: +$('r-night-end').value },
     nearDepositHours: +$('r-near').value || 1, depositReminderMinutes: +$('r-remind-min').value || 0, autoBlockCancels: +$('r-autoblock').value || 0,
     optionLimits: Object.fromEntries([...document.querySelectorAll('[data-optlimit]')].filter(i => +i.value > 0).map(i => [i.dataset.optlimit, +i.value])),
   };
