@@ -78,7 +78,7 @@ DEFAULT_SETTINGS = {
     'templates': {  # 단문(SMS 90바이트 = 한글 약 45자) 기준. 넘으면 장문(LMS)으로 발송
         'received': '[동해카라반]{금액}원 {계좌} {입금기한}까지 입금시 예약확정',
         'deposit_reminder': '[동해카라반]입금마감 1시간전입니다 {금액}원 {계좌}',
-        'confirmed': '[동해카라반]{이름}님 {입실} {객실} 예약확정. 입실15시 퇴실11시',
+        'confirmed': '[동해카라반]{이름}님 {입실} {객실} 예약확정\n입실15시 퇴실11시 문의{펜션전화}',
         'expired': '[동해카라반]입금기한이 지나 {입실} 예약이 자동취소되었습니다',
         'cancelled': '[동해카라반]{입실} {객실} 예약이 취소되었습니다 문의{펜션전화}',
         'refund_done': '[동해카라반]{이름}님 환불금 {환불}원 입금완료되었습니다',
@@ -223,7 +223,13 @@ def load_settings():
                 s[k].update(v)
             else:
                 s[k] = v
+    for kind, old in OLD_TEMPLATES.items():  # 예전 기본 문구를 그대로 쓰는 중이면 새 기본 문구로 (직접 고친 문구는 그대로)
+        if s['templates'].get(kind) == old:
+            s['templates'][kind] = DEFAULT_SETTINGS['templates'][kind]
     return s
+
+
+OLD_TEMPLATES = {'confirmed': '[동해카라반]{이름}님 {입실} {객실} 예약확정. 입실15시 퇴실11시'}
 
 
 def save_settings(data):
