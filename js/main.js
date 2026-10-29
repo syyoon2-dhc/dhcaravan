@@ -211,12 +211,28 @@ function renderPriceTables() {
     let groupCell = '';
     if (!seen[r.group]) {
       seen[r.group] = true;
-      groupCell = `<td rowspan="${groupCount[r.group]}">${GROUP_LABEL[r.group] || r.group}</td>`;
+      groupCell = `<td class="grp" rowspan="${groupCount[r.group]}">${GROUP_LABEL[r.group] || r.group}</td>`;
     }
-    return `<tr>${groupCell}<td>${r.name}</td><td>${r.std}</td><td>${r.max}</td>` +
+    return `<tr>${groupCell}<td class="room">${r.name}</td><td>${r.std}</td><td>${r.max}</td>` +
       `<td>${won(r.price.normal[0])}</td><td>${won(r.price.normal[1])}</td>` +
       `<td>${won(r.price.peak[0])}</td><td>${won(r.price.peak[1])}</td>` +
       `<td>${r.extra}</td></tr>`;
+  }).join('');
+
+  // 휴대폰용 객실별 요금 카드 (표가 화면에 다 안 들어가서)
+  let lastGroup = '';
+  document.getElementById('price-cards').innerHTML = ROOMS.map(r => {
+    const head = r.group !== lastGroup ? `<h4 class="pc-group">${GROUP_LABEL[r.group] || r.group}</h4>` : '';
+    lastGroup = r.group;
+    return `${head}<div class="pc">
+      <div class="pc-head"><b>${r.name}</b><span>기준 ${r.std}인 · 최대 ${r.max}인</span></div>
+      <table>
+        <tr><th></th><th>평일</th><th>주말</th></tr>
+        <tr><th>비수기</th><td>${won(r.price.normal[0])}</td><td>${won(r.price.normal[1])}</td></tr>
+        <tr><th>성수기</th><td>${won(r.price.peak[0])}</td><td>${won(r.price.peak[1])}</td></tr>
+      </table>
+      ${r.extra ? `<p class="pc-extra">${r.extra}</p>` : ''}
+    </div>`;
   }).join('');
 
   // 옵션 표 (같은 이름은 칸 병합)
@@ -228,7 +244,7 @@ function renderPriceTables() {
     if (i === 0 || opts[i].name !== opts[i - 1].name) {
       let span = 1;
       while (i + span < opts.length && opts[i + span].name === opts[i].name) span++;
-      nameCell = `<td rowspan="${span}">${opts[i].name}</td>`;
+      nameCell = `<td class="grp" rowspan="${span}">${opts[i].name}</td>`;
     }
     const price = opts[i].price === '무료' ? '<strong>무료</strong>' : opts[i].price;
     html += `<tr>${nameCell}<td>${opts[i].detail}</td><td>${price}</td></tr>`;
