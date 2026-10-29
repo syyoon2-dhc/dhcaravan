@@ -160,6 +160,23 @@ CREATE TABLE IF NOT EXISTS sms_log (
   ok INTEGER NOT NULL,
   result TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS visit_daily (
+  day TEXT PRIMARY KEY,
+  visitors INTEGER NOT NULL DEFAULT 0,
+  home_views INTEGER NOT NULL DEFAULT 0,
+  reserve_views INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS visit_source (
+  day TEXT NOT NULL,
+  source TEXT NOT NULL,
+  visitors INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, source)
+);
+CREATE TABLE IF NOT EXISTS visit_seen (
+  day TEXT NOT NULL,
+  vid TEXT NOT NULL,
+  PRIMARY KEY (day, vid)
+);
 """
 
 
@@ -2063,6 +2080,72 @@ def rate_limited(key, limit, window):
         return False
 
 
+# ──────────────────────────────────────────────
+#  홈페이지 방문자 수 (관리자 [운영관리 → 방문자 통계])
+#  손님 브라우저가 만든 임의 번호(vid)로 "오늘 처음 온 사람"만 셉니다.
+#  이름·전화·IP 는 저장하지 않고, 임의 번호도 이틀 뒤 지우고 날짜별 숫자만 남깁니다.
+# ──────────────────────────────────────────────
+VISIT_PAGES = ('home', 'reserve')
+VISIT_ID_RE = re.compile(r'^[0-9a-zA-Z]{8,40}$')
+BOT_RE = re.compile(r'bot|crawl|spider|slurp|preview|headless|lighthouse|facebookexternalhit', re.I)
+VISIT_SOURCES = [  # 어디서 들어왔는지 (이전 페이지 주소로 판단)
+    ('네이버', ('naver.',)), ('구글', ('google.',)), ('다음·카카오', ('daum.', 'kakao.')),
+    ('인스타그램', ('instagram.',)), ('페이스북', ('facebook.', 'fb.')), ('유튜브', ('youtube.', 'youtu.be')),
+    ('땡큐캠핑', ('thankqcamping.',)),
+]
+
+
+def visit_source(ref):
+    host = re.sub(r'^https?://', '', (ref or '').strip().lower()).split('/')[0]
+    if not host or 'syyoon2-dhc.github.io' in host or host.endswith('.ts.net') or host.startswith(('localhost', '127.')):
+        return '직접 방문'
+    for name, keys in VISIT_SOURCES:
+        if any(k in host for k in keys):
+            return name
+    return '기타 사이트'
+
+
+def record_visit(body):
+    page, vid, ua = body.get('page'), str(body.get('vid') or ''), str(body.get('ua') or '')
+    if page not in VISIT_PAGES or not VISIT_ID_RE.match(vid) or BOT_RE.search(ua):
+        return
+    today = date.today().isoformat()
+    with _lock:
+        conn = db()
+        conn.execute('INSERT OR IGNORE INTO visit_daily (day) VALUES (?)', (today,))
+        conn.execute(f'UPDATE visit_daily SET {page}_views = {page}_views + 1 WHERE day = ?', (today,))
+        new = conn.execute('INSERT OR IGNORE INTO visit_seen (day, vid) VALUES (?, ?)', (today, vid)).rowcount
+        if new:
+            conn.execute('UPDATE visit_daily SET visitors = visitors + 1 WHERE day = ?', (today,))
+            conn.execute('INSERT INTO visit_source (day, source, visitors) VALUES (?, ?, 1) '
+                         'ON CONFLICT(day, source) DO UPDATE SET visitors = visitors + 1', (today, visit_source(body.get('ref'))))
+            conn.execute('DELETE FROM visit_seen WHERE day < ?', ((date.today() - timedelta(days=1)).isoformat(),))
+        conn.commit()
+
+
+def visit_stats(days):
+    days = max(7, min(int(days or 30), 400))
+    today = date.today()
+    start = (today - timedelta(days=days - 1)).isoformat()
+    with _lock:
+        conn = db()
+        rows = {r['day']: dict(r) for r in conn.execute('SELECT * FROM visit_daily WHERE day >= ?', (start,))}
+        src = conn.execute('SELECT source, SUM(visitors) n FROM visit_source WHERE day >= ? GROUP BY source ORDER BY n DESC',
+                           (start,)).fetchall()
+        total = conn.execute('SELECT COALESCE(SUM(visitors), 0) v, COALESCE(SUM(home_views + reserve_views), 0) pv, '
+                             'MIN(day) since FROM visit_daily').fetchone()
+        month = conn.execute('SELECT COALESCE(SUM(visitors), 0) FROM visit_daily WHERE day >= ?',
+                             (today.replace(day=1).isoformat(),)).fetchone()[0]
+    items = []
+    for i in range(days):  # 방문이 없던 날도 0 으로 채움 (최근 날짜가 위)
+        d = (today - timedelta(days=i)).isoformat()
+        r = rows.get(d, {})
+        items.append({'day': d, 'visitors': r.get('visitors', 0),
+                      'home_views': r.get('home_views', 0), 'reserve_views': r.get('reserve_views', 0)})
+    return {'items': items, 'sources': [dict(r) for r in src], 'month': month,
+            'total': total['v'], 'total_views': total['pv'], 'since': total['since']}
+
+
 def handle_public(method, path, query, body, ip):
     """손님용 API — 로그인 없이 사용. (상태코드, 응답) 반환"""
     q = lambda k, d='': query.get(k, [d])[0]
@@ -2094,6 +2177,10 @@ def handle_public(method, path, query, body, ip):
         if rate_limited('lookup:' + ip, 20, 600):
             return 429, {'error': '잠시 후 다시 시도해 주세요'}
         return 200, lookup(body.get('code'), body.get('phone'))
+    if method == 'POST' and path == '/api/public/visit':
+        if not rate_limited('visit:' + ip, 300, 3600):
+            record_visit(body)
+        return 200, {'ok': True}
     return 404, {'error': '알 수 없는 요청'}
 
 
@@ -2137,6 +2224,8 @@ def handle_admin(method, path, query, body):
                 r = get_reservation(int(q('id', '0')))
                 group = group_rows(r['group_code']) if r['group_code'] else [r]
             return 200, {'item': r, 'group': group}
+        if path == '/api/bk/visits':
+            return 200, visit_stats(q('days', '30'))
         if path == '/api/bk/stats':
             return 200, stats(int(q('year') or date.today().year))
         if path == '/api/bk/settings':

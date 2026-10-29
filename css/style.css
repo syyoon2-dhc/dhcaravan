@@ -135,17 +135,18 @@ a { color: inherit; text-decoration: none; }
 .price-table { width: 100%; border-collapse: collapse; font-size: 15px; min-width: 760px; }
 .price-table th, .price-table td { padding: 13px 10px; text-align: center; border: 1px solid var(--line); }
 .price-table thead th { background: var(--blue); color: #fff; border-color: rgba(255,255,255,.25); font-weight: 700; }
-.price-table tbody td.grp { font-weight: 700; background: var(--sky); }
-.price-table tbody td.room { font-weight: 700; }
+.price-table tbody td.grp { font-weight: 800; background: #d3e8f5; color: var(--blue-deep); }
+.price-table tbody td.room { font-weight: 700; background: var(--sky); color: var(--blue-deep); }
 .price-table tbody tr:hover td { background: #f4fafd; }
-.price-table tbody tr:hover td.grp { background: var(--sky); }
+.price-table tbody tr:hover td.grp { background: #d3e8f5; }
+.price-table tbody tr:hover td.room { background: #d9eef9; }
 /* 휴대폰용 객실별 요금 카드 */
 .price-cards { display: none; }
 .pc-group { font-size: 16px; font-weight: 800; color: var(--blue-deep); margin: 18px 2px 8px; }
 .pc-group:first-child { margin-top: 0; }
 .pc { background: #fff; border-radius: 12px; box-shadow: 0 3px 14px rgba(13,60,97,.08); padding: 14px 16px; margin-bottom: 10px; }
-.pc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
-.pc-head b { font-size: 16.5px; }
+.pc-head { background: var(--sky); margin: -14px -16px 8px; padding: 11px 16px; border-radius: 12px 12px 0 0; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.pc-head b { font-size: 16.5px; color: var(--blue-deep); }
 .pc-head span { font-size: 13px; color: var(--gray); white-space: nowrap; }
 .pc table { width: 100%; border-collapse: collapse; font-size: 15px; }
 .pc th, .pc td { padding: 7px 6px; text-align: center; border-bottom: 1px solid var(--line); }

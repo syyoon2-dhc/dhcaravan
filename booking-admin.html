@@ -60,6 +60,17 @@
   .tile.click { cursor:pointer; }
   .tile .lb { font-size:12.5px; color:var(--gray); font-weight:600; }
   .tile .v { font-size:22px; font-weight:800; margin-top:2px; font-variant-numeric:tabular-nums; }
+  /* 방문자 통계 */
+  .vs-chart { display:flex; align-items:flex-end; gap:2px; height:150px; padding:8px 0 0; border-bottom:1px solid var(--line); }
+  .vs-col { flex:1; height:100%; display:flex; align-items:flex-end; position:relative; cursor:default; }
+  .vs-col i { display:block; width:100%; background:var(--blue); border-radius:4px 4px 0 0; min-height:0; }
+  .vs-col:hover i { background:var(--blue-deep); }
+  .vs-col.today i { background:#f0a020; }
+  .vs-axis { display:flex; justify-content:space-between; font-size:11.5px; color:var(--muted); margin-top:4px; }
+  .vs-src { display:grid; grid-template-columns:96px 1fr 70px; gap:6px 10px; align-items:center; font-size:13.5px; }
+  .vs-src .bar { height:14px; background:var(--sky); border-radius:4px; overflow:hidden; }
+  .vs-src .bar i { display:block; height:100%; background:var(--blue); border-radius:4px; }
+  .vs-src .n { text-align:right; font-variant-numeric:tabular-nums; color:var(--ink); font-weight:700; }
   .tile .v small { font-size:12.5px; font-weight:600; color:var(--gray); }
 
   /* 표 */
@@ -239,6 +250,7 @@
       <div class="tile click" id="t-pending-tile"><div class="lb">입금 대기 (확인 필요)</div><div class="v" id="t-pending">-</div></div>
       <div class="tile click" id="t-refund-tile"><div class="lb">환불 예정</div><div class="v" id="t-refund">-</div></div>
       <div class="tile"><div class="lb">이번 달 매출 (퇴실 기준)</div><div class="v" id="t-rev">-</div></div>
+      <div class="tile click" id="t-visit-tile"><div class="lb">오늘 홈페이지 방문자</div><div class="v" id="t-visit">-</div></div>
     </div>
     <div class="card">
       <div class="toolbar">
@@ -449,6 +461,33 @@
     <div class="card">
       <h2>발송 기록 <small>(최근 300건)</small></h2>
       <div class="tbl-wrap"><table class="list" id="m-log"></table></div>
+    </div>
+  </section>
+
+  <!-- ======================= 방문자 통계 ======================= -->
+  <section id="tab-visits" hidden>
+    <div class="tiles">
+      <div class="tile"><div class="lb">오늘</div><div class="v" id="v-today">-</div></div>
+      <div class="tile"><div class="lb">어제</div><div class="v" id="v-yday">-</div></div>
+      <div class="tile"><div class="lb">이번 달</div><div class="v" id="v-month">-</div></div>
+      <div class="tile"><div class="lb">누적 <span id="v-since"></span></div><div class="v" id="v-total">-</div></div>
+    </div>
+    <div class="card">
+      <h2 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">일별 방문자 <small>(같은 사람이 하루에 여러 번 와도 1명 · 막대에 마우스를 올리면 숫자)</small>
+        <select id="v-days" style="margin-left:auto"><option value="30">최근 30일</option><option value="90">최근 90일</option><option value="365">최근 1년</option></select></h2>
+      <div class="vs-chart" id="v-chart"></div>
+      <div class="vs-axis"><span id="v-from"></span><span>오늘</span></div>
+    </div>
+    <div class="card">
+      <h2>어디서 들어왔나 <small>(기간 중 방문자 기준)</small></h2>
+      <div class="vs-src" id="v-src"></div>
+      <p class="hint" style="margin-top:10px">· "직접 방문"은 주소를 직접 입력했거나 카톡·문자 링크, 즐겨찾기로 들어온 경우입니다.</p>
+    </div>
+    <div class="card">
+      <h2>날짜별 숫자</h2>
+      <div class="tbl-wrap"><table class="list" id="v-table"></table></div>
+      <p class="hint" style="margin-top:10px">· 방문자 = 그날 홈페이지나 예약 화면을 연 사람 수 · 조회 = 페이지를 연 횟수<br>
+        · 이름·전화·IP 는 저장하지 않습니다 (브라우저 임의 번호로만 셈). 사장님이 직접 연 것도 함께 세어집니다.</p>
     </div>
   </section>
 
@@ -707,7 +746,7 @@ const MENUS = [
   { key: 'sales', label: '매출관리', tabs: [['smonth', '월별매출현황'], ['sday', '일별매출현황'], ['scal', '예약정산달력'], ['scost', '비용·정산자료']] },
   { key: 'cust', label: '고객관리', tabs: [['cust:all', '전체고객'], ['cust:blocked', '예약불가그룹'], ['cust:deleted', '삭제고객']] },
   { key: 'camp', label: '캠핑장관리', tabs: [['rules', '예약정보설정'], ['special', '임시요금관리'], ['closed', '휴장일관리']] },
-  { key: 'ops', label: '운영관리', tabs: [['settings', '환경설정'], ['smsset', '문자발송설정'], ['sms', '문자 발송 · 기록']] },
+  { key: 'ops', label: '운영관리', tabs: [['settings', '환경설정'], ['smsset', '문자발송설정'], ['sms', '문자 발송 · 기록'], ['visits', '방문자 통계']] },
 ];
 const SECTION_OF = { rules: 'settings', smsset: 'settings' };  // 설정 화면을 나눠서 보여줌
 let currentMenu = 'rsv', currentTab = 'cal', custView = 'all';
@@ -749,10 +788,12 @@ async function loadSummary() {
     $('t-refund').style.color = refund.items.length ? 'var(--red)' : '';
     $('t-rev').innerHTML = `${won(sales.items[+TODAY.slice(5, 7) - 1].total)}<small> 원</small>`;
     const c = $('pending-cnt'); if (c) { c.hidden = !pn; c.textContent = pn; }
+    api('/api/bk/visits?days=7').then(v => { $('t-visit').innerHTML = `${v.items[0].visitors}<small> 명</small>`; }).catch(() => {});
   } catch (e) { /* 로그인 화면 */ }
 }
 $('t-pending-tile').onclick = () => { $('p-status').value = 'pending'; $('p-from').value = ''; $('p-to').value = ''; openTab('pay'); };
 $('t-refund-tile').onclick = () => openTab('refund');
+$('t-visit-tile').onclick = () => openTab('visits');
 
 /* =============== 예약현황 =============== */
 let calMonth = TODAY.slice(0, 7), calView = 'month';
@@ -1405,6 +1446,39 @@ function openCustSms(phones, category, all) {
 
 /* =============== 문자 =============== */
 const KIND_LABEL = { ...TEMPLATE_LABEL, manual: '직접 발송', customer: '고객 문자', admin_expired: '미입금 자동취소 알림 (사장님)', admin_paid: '입금확인 알림 (사장님)', test: '텔레그램 테스트' };
+/* =============== 방문자 통계 =============== */
+$('v-days').onchange = () => loadVisits();
+async function loadVisits() {
+  let v;
+  try { v = await api(`/api/bk/visits?days=${$('v-days').value}`); } catch (e) { toast('⚠️ ' + e.message); return; }
+  const n = x => `${won(x)}<small> 명</small>`;
+  $('v-today').innerHTML = n(v.items[0].visitors);
+  $('v-yday').innerHTML = n(v.items[1].visitors);
+  $('v-month').innerHTML = n(v.month);
+  $('v-total').innerHTML = n(v.total);
+  $('v-since').textContent = v.since ? `(${fmt(v.since)}부터)` : '';
+  const days = v.items.slice().reverse(); // 왼쪽이 오래된 날
+  // 90일이 넘으면 막대가 너무 가늘어서 주 단위(7일 합계)로 묶음 — 오늘이 든 주가 맨 오른쪽
+  const bars = [];
+  const per = days.length > 90 ? 7 : 1;
+  for (let end = days.length; end > 0; end -= per) {
+    const g = days.slice(Math.max(0, end - per), end);
+    bars.unshift({ from: g[0].day, to: g[g.length - 1].day, visitors: g.reduce((a, d) => a + d.visitors, 0),
+      views: g.reduce((a, d) => a + d.home_views + d.reserve_views, 0) });
+  }
+  const max = Math.max(1, ...bars.map(b => b.visitors));
+  $('v-chart').innerHTML = bars.map(b => `<div class="vs-col${b.to === TODAY ? ' today' : ''}" title="${per > 1 ? `${fmt(b.from)}~${fmt(b.to)}` : fmt(b.to)} — 방문자 ${b.visitors}명 · 조회 ${b.views}회">
+    <i style="height:${(b.visitors / max) * 100}%"></i></div>`).join('');
+  $('v-from').textContent = fmt(bars[0].from) + (per > 1 ? ' (주 단위)' : '');
+  const srcMax = Math.max(1, ...v.sources.map(s => s.n));
+  $('v-src').innerHTML = v.sources.length ? v.sources.map(s => `<span>${esc(s.source)}</span>
+    <div class="bar"><i style="width:${(s.n / srcMax) * 100}%"></i></div><span class="n">${won(s.n)}명</span>`).join('')
+    : '<span class="hint" style="grid-column:1/-1">아직 기록이 없습니다.</span>';
+  $('v-table').innerHTML = '<tr><th>날짜</th><th>방문자</th><th>홈페이지 조회</th><th>예약 화면 조회</th></tr>' +
+    v.items.filter(d => per === 1 || d.visitors || d.home_views || d.reserve_views).map(d => `<tr><td style="text-align:center">${fmt(d.day)}</td><td style="text-align:center"><b>${d.visitors}</b></td>
+      <td style="text-align:center">${d.home_views}</td><td style="text-align:center">${d.reserve_views}</td></tr>`).join('');
+}
+
 async function loadSms() {
   let items;
   try { items = (await api('/api/bk/sms/log')).items; } catch (e) { toast('⚠️ ' + e.message); return; }
@@ -1904,7 +1978,7 @@ $('a-myip').onclick = async () => {
 const LOADERS = { cal: loadCal, pay: loadPay, refund: loadRefund, cancel: loadCancel, monthly: loadMonthly, opts: loadOpts,
   smonth: loadSalesMonthly, sday: loadSalesDaily, scal: loadSalesCal, scost: loadCost, cust: loadCust, sms: loadSms,
   settings: () => loadSettings('env'), smsset: () => loadSettings('sms'), rules: () => loadSettings('rules'),
-  special: loadSpecial, closed: loadClosed };
+  special: loadSpecial, closed: loadClosed, visits: loadVisits };
 async function loadMeta() { META = await api('/api/bk/settings'); }
 async function init() {
   try { await loadMeta(); } catch { return; }
