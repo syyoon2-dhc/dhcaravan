@@ -555,6 +555,22 @@
   </div>
 </div>
 
+<!-- ===== 객실 360도 투어 (js/tour.js) ===== -->
+<div class="tour" id="vr-tour" hidden>
+  <div class="tour-pano" id="tour-pano"></div>
+  <div class="tour-top">
+    <div><b id="tour-title"></b> <span id="tour-spot"></span></div>
+    <button class="tour-close" id="tour-close" aria-label="닫기">✕</button>
+  </div>
+  <div class="tour-map" id="tour-map">
+    <button type="button" class="tour-map-toggle" id="tour-map-toggle">도면</button>
+    <div class="tour-map-box">
+      <img id="tour-map-img" alt="객실 도면">
+      <div class="tour-dots" id="tour-dots"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== 갤러리 라이트박스 ===== -->
 <div class="lightbox" id="lightbox" hidden>
   <button class="lightbox-close" id="lightbox-close" aria-label="닫기">✕</button>
@@ -581,6 +597,7 @@
   </div>
 </div>
 
+<script src="js/tour.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

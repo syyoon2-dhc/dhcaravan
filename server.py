@@ -45,6 +45,7 @@ MAX_PHOTO = 20 * 1024 * 1024    # 20MB (브라우저에서 이미 압축돼서 �
 MAX_VIDEO = 500 * 1024 * 1024   # 500MB
 
 PHOTO_RE = re.compile(r'^\d+\.jpg$')
+TOUR_FILE_RE = re.compile(r'^(360-\d{1,2}|layout)\.jpg$')  # 360도 투어 사진 · 도면
 
 # 인터넷에 공개해도 되는 파일만 허용 (admin_config.json, private/, .git 등은 차단)
 PUBLIC_FILES = {'/', '/index.html', '/admin.html', '/booking-admin.html', '/reserve.html', '/privacy.html',
@@ -292,6 +293,20 @@ class Handler(SimpleHTTPRequestHandler):
                 json.dump(data, f, ensure_ascii=False, indent=2)
             return self._json(200, {'ok': True})
 
+        # ---------- 360도 투어 설정 저장 (도면 위 촬영 위치 · 방향) ----------
+        if parsed.path == '/api/tour':
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+                data = json.loads(self.rfile.read(length).decode('utf-8'))
+            except (ValueError, json.JSONDecodeError):
+                return self._json(400, {'error': '잘못된 투어 데이터'})
+            if not isinstance(data, dict) or any(k not in ROOM_IDS for k in data):
+                return self._json(400, {'error': '잘못된 투어 데이터'})
+            os.makedirs(os.path.join(ROOT, 'data'), exist_ok=True)
+            with open(os.path.join(ROOT, 'data', 'tour.json'), 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            return self._json(200, {'ok': True})
+
         # ---------- 팝업 저장 ----------
         if parsed.path == '/api/popup':
             try:
@@ -370,6 +385,14 @@ class Handler(SimpleHTTPRequestHandler):
                     'compressed': final_size < original_size,
                 })
 
+            if kind in ('pano', 'layout'):  # 360도 투어: 위치별 사진 360-<번호>.jpg / 도면 layout.jpg
+                fname = 'layout.jpg' if kind == 'layout' else f"360-{query.get('no', [''])[0]}.jpg"
+                if not TOUR_FILE_RE.fullmatch(fname):
+                    return self._json(400, {'error': '잘못된 파일 이름'})
+                with open(os.path.join(d, fname), 'wb') as f:
+                    f.write(data)
+                return self._json(200, {'ok': True, 'file': fname})
+
             photos = list_photos(d)
             next_no = int(photos[-1].split('.')[0]) + 1 if photos else 1
             fname = f'{next_no}.jpg'
@@ -380,7 +403,7 @@ class Handler(SimpleHTTPRequestHandler):
         if parsed.path == '/api/delete':
             fname = query.get('file', [''])[0]
             target = os.path.join(d, fname)
-            if fname == 'video.mp4':
+            if fname == 'video.mp4' or TOUR_FILE_RE.fullmatch(fname):
                 if os.path.exists(target):
                     os.remove(target)
                 return self._json(200, {'ok': True})

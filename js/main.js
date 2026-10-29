@@ -109,6 +109,9 @@ function renderRooms() {
       }
     });
     probeRoomVideo(room.id).then(src => { roomVideos[room.id] = src; });
+    if (DhcTour.has(room.id)) {
+      card.querySelector('.room-thumb').insertAdjacentHTML('beforeend', '<span class="room-360">360°</span>');
+    }
   });
 }
 
@@ -123,10 +126,15 @@ function openRoomModal(room) {
     ? roomPhotos[room.id]
     : [room.cover];
   const video = roomVideos[room.id];
+  const tour = DhcTour.has(room.id);
 
-  // 동영상이 있으면 첫 번째 슬라이드로
+  // 360도 사진 → 동영상 → 사진 순서
   track.innerHTML =
-    (video ? `<div class="slider-video"><video src="${video}" controls playsinline preload="metadata"></video></div>` : '') +
+    (tour ? `<div class="slider-pano">
+      <div class="pano-cover" style="background-image:url('${photos[0]}')">
+        <button type="button" class="pano-start">🔄 360° 둘러보기</button>
+      </div></div>` : '') +
+    (video ?`<div class="slider-video"><video src="${video}" controls playsinline preload="metadata"></video></div>` : '') +
     photos.map(src => `<img src="${src}" alt="${room.name} 사진">`).join('');
   if (!roomPhotos[room.id] || roomPhotos[room.id].length === 0) {
     track.innerHTML += `<div class="slider-empty"><span>📷</span>객실 사진 준비 중입니다</div>`;
@@ -134,6 +142,21 @@ function openRoomModal(room) {
   slideCount = track.children.length;
   slideIdx = 0;
   updateSlider();
+
+  if (tour) {
+    const btn = track.querySelector('.pano-start');
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.textContent = '불러오는 중...';
+      try {
+        await DhcTour.open(room);
+      } catch (err) {
+        btn.textContent = '⚠️ 다시 시도';
+      }
+      btn.disabled = false;
+      if (btn.textContent === '불러오는 중...') btn.textContent = '🔄 360° 둘러보기';
+    });
+  }
 
   dotsBox.innerHTML = Array.from({ length: slideCount }, (_, i) =>
     `<button data-i="${i}" class="${i === 0 ? 'on' : ''}" aria-label="${i + 1}번 사진"></button>`).join('');
@@ -340,7 +363,7 @@ async function loadPopup() {
 }
 
 /* ---------- 초기화 ---------- */
-loadData().then(() => {
+Promise.all([loadData(), DhcTour.load()]).then(() => {
   renderRooms();
   renderPriceTables();
 });

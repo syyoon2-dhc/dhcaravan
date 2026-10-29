@@ -40,6 +40,41 @@
   .video-meta { flex:1; font-size:14px; color:var(--gray); }
   .btn-del-video { border:0; background:#fdeaea; color:#c22; font-weight:700; padding:8px 14px; border-radius:8px; cursor:pointer; font-size:13.5px; }
 
+  /* 360도 투어 편집 */
+  .te-map { position:relative; line-height:0; border-radius:10px; overflow:hidden; border:1px solid var(--line); cursor:crosshair; }
+  .te-map[hidden] { display:none; }
+  .te-map img { width:100%; display:block; }
+  .te-dots { position:absolute; inset:0; }
+  .te-dot { position:absolute; width:28px; height:28px; margin:-14px 0 0 -14px; border-radius:50%; border:2px solid #fff;
+    background:#e33; color:#fff; font-size:13px; font-weight:800; cursor:grab; touch-action:none; box-shadow:0 1px 5px rgba(0,0,0,.45); padding:0; line-height:1; }
+  .te-dot.nofile { background:#999; }
+  .te-dot.sel { outline:3px solid #ffc828; }
+  .te-list { margin-top:10px; }
+  .te-row { display:flex; align-items:center; gap:7px; padding:8px; border:1px solid var(--line); border-radius:10px; margin-bottom:6px; flex-wrap:wrap; }
+  .te-row.sel { border-color:#ffc828; background:#fffbe9; }
+  .te-no { width:24px; height:24px; border-radius:50%; background:#e33; color:#fff; font-size:12px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .te-name { flex:1; min-width:110px; padding:8px 9px; border:1.5px solid var(--line); border-radius:8px; font-size:14px; font-family:inherit; }
+  .te-thumb { width:84px; height:42px; object-fit:cover; border-radius:6px; background:var(--sky); }
+  .te-none { display:flex; align-items:center; justify-content:center; font-size:11.5px; color:var(--gray); }
+  .te-btn { border:1.5px solid #b9d4e6; background:var(--sky); color:var(--blue-deep); border-radius:8px; padding:7px 10px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; }
+  .te-btn:disabled { opacity:.45; cursor:default; }
+  .te-del { width:30px; height:30px; border:0; border-radius:50%; background:#fdeaea; color:#c22; font-weight:700; cursor:pointer; }
+  .te-dir { position:fixed; inset:0; z-index:60; background:#000; }
+  .te-dir[hidden] { display:none; }
+  .te-dir-pano { position:absolute; inset:0; }
+  .te-dir-aim { position:absolute; left:50%; top:0; bottom:0; width:0; border-left:2px dashed #ffc828; pointer-events:none; z-index:3; }
+  .te-dir-bar { position:absolute; left:0; right:0; bottom:0; z-index:4; background:rgba(255,255,255,.95); padding:12px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .te-dir-bar p { flex:1; min-width:200px; font-size:14px; line-height:1.5; }
+  .te-dir-bar small { color:var(--gray); }
+  .te-dir-map { position:relative; line-height:0; margin-top:16px; }
+  .te-dir-map img { max-width:150px; max-height:120px; border-radius:6px; }
+  .te-dir-map i { position:absolute; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%; background:#e33; border:2px solid #fff; }
+  .te-dir-map b { position:absolute; top:-2px; left:50%; transform:translate(-50%,-100%); font-size:12px; line-height:1.2; color:#c22; white-space:nowrap; }
+  .te-dir-btns { display:flex; gap:8px; }
+  .te-dir-btns button { border:0; border-radius:10px; padding:12px 16px; font-size:15px; font-weight:800; cursor:pointer; font-family:inherit; }
+  #te-dir-cancel { background:#e8eef3; color:var(--ink); }
+  #te-dir-ok { background:var(--blue); color:#fff; }
+
   .progress { margin-top:12px; display:none; }
   .progress.show { display:block; }
   .bar { height:10px; background:#e3edf4; border-radius:6px; overflow:hidden; }
@@ -128,6 +163,19 @@
     <p class="hint">· 동영상은 자동으로 <b>720p로 압축</b>되어 저장됩니다 (휴대폰 원본 그대로 올려도 OK).<br>· 새 동영상을 올리면 기존 동영상이 교체됩니다.</p>
   </div>
 
+  <div class="card" id="tour-card">
+    <h2>🔄 360도 투어 <small>(손님이 도면의 위치를 누르면 그 자리 360도 사진으로 이동)</small></h2>
+    <div class="te-map" id="te-map" hidden><img id="te-img" alt="도면"><div class="te-dots" id="te-dots"></div></div>
+    <div class="empty" id="te-nomap" hidden>도면이 없습니다. 아래 [도면 올리기]로 먼저 올려 주세요.</div>
+    <p class="hint">· 도면의 빈 곳을 누르면 <b>촬영 위치</b>가 추가됩니다. 점은 끌어서 옮길 수 있습니다.<br>· 위치마다 <b>📷 360 사진</b>을 올린 뒤 <b>🧭 방향</b>을 맞춰 주세요. 사진이 있는 위치만 손님에게 보입니다.</p>
+    <div class="te-list" id="te-list"></div>
+    <label class="upload-btn" style="padding:11px;font-size:14px">🗺️ 도면 올리기 / 바꾸기
+      <input type="file" id="te-layout-input" accept="image/*">
+    </label>
+    <div class="progress" id="te-progress"><div class="bar"><i></i></div><p id="te-msg"></p></div>
+    <p class="hint">· 360 사진은 가로:세로 <b>2:1</b>인 360도 사진(360 카메라 · 휴대폰 360 앱)이어야 합니다.<br>· 휴대폰에서도 잘 보이도록 <b>가로 4096px</b>로 자동으로 줄여 저장됩니다.</p>
+  </div>
+
   <div class="card" id="popup-card">
     <h2>📢 팝업 관리 <small>(이벤트 · 할인 홍보)</small></h2>
     <div class="pe-field" style="margin-bottom:12px">
@@ -154,6 +202,18 @@
     <div id="price-editor"><div class="empty">불러오는 중...</div></div>
     <button class="save-btn" id="save-prices">💾 요금 저장</button>
     <p class="hint" id="price-hint">· 금액은 숫자만 입력하세요 (예: 120000).<br>· 저장하면 홈페이지 요금표와 객실 팝업에 모두 반영됩니다.</p>
+  </div>
+</div>
+
+<!-- 360도 방향 맞추기 창 -->
+<div class="te-dir" id="te-dir" hidden>
+  <div class="te-dir-pano" id="te-dir-pano"></div>
+  <div class="te-dir-aim"></div>
+  <div class="te-dir-bar">
+    <div class="te-dir-map"><img id="te-dir-img" alt="도면"><i id="te-dir-dot"></i><b>↑ 도면 위쪽</b></div>
+    <p>360 사진을 끌어 돌려서 <b>도면의 위쪽(↑) 방향</b>이 화면 가운데 선에 오게 맞춘 뒤 저장하세요.<br>
+      <small>예) 도면 위쪽 벽에 침대가 있으면 → 침대가 가운데 오게</small></p>
+    <div class="te-dir-btns"><button id="te-dir-cancel">취소</button><button id="te-dir-ok">이 방향으로 저장</button></div>
   </div>
 </div>
 
@@ -288,6 +348,7 @@ async function loadMediaRemote() {
   } else {
     area.innerHTML = '<div class="empty">등록된 동영상이 없습니다.</div>';
   }
+
 }
 
 async function remoteDeletePhoto(name, idx) {
@@ -342,7 +403,7 @@ $('login-form').addEventListener('submit', async e => {
       $('login-pw').value = '';
       hideLogin();
       loadMedia();
-      loadPrices();
+      loadPrices(); loadTour();
       loadPopupAdmin();
     } else {
       $('login-err').textContent = '토큰이 올바르지 않습니다';
@@ -362,7 +423,7 @@ $('login-form').addEventListener('submit', async e => {
     $('login-pw').value = '';
     hideLogin();
     loadMedia();
-    loadPrices();
+    loadPrices(); loadTour();
     loadPopupAdmin();
   } catch {
     $('login-err').textContent = '서버에 연결할 수 없습니다 (server.py 실행 확인)';
@@ -382,7 +443,7 @@ ROOMS.forEach(r => {
   const b = document.createElement('button');
   b.textContent = r.name;
   b.dataset.id = r.id;
-  b.onclick = () => { current = r.id; updateChips(); loadMedia(); };
+  b.onclick = () => { current = r.id; updateChips(); loadMedia(); renderTour(); };
   $('rooms').appendChild(b);
 });
 function updateChips() {
@@ -459,6 +520,7 @@ async function loadMedia() {
   } else {
     area.innerHTML = '<div class="empty">등록된 동영상이 없습니다.</div>';
   }
+
 }
 
 /* ---------- 사진 자동 압축 (가로 최대 1600px, JPEG 80%) ---------- */
@@ -581,6 +643,259 @@ $('video-input').addEventListener('change', e => {
   xhr.onerror = () => { prog.classList.remove('show'); toast('⚠️ 업로드 중 오류가 발생했습니다'); };
   xhr.send(file);
 });
+
+/* ---------- 360도 투어 편집 ----------
+ * data/tour.json 에 객실별 도면 · 촬영 위치(x, y %) · 방향(north) · 360 사진 파일을 저장합니다.
+ * (손님 화면은 js/tour.js — 도면의 위치를 누르면 그 자리 360도 사진으로 이동)
+ */
+let tourData = null;
+let tourSha = null; // 원격 모드: GitHub 파일 버전
+let teSel = null;   // 선택한 위치 id
+
+const tourRoom = () => (tourData[current] = tourData[current] || { layout: null, spots: [] });
+const tourUrl = (file, v) => MODE === 'remote'
+  ? `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${mediaDirPath()}/${file}?v=${v || ''}`
+  : `${mediaDir()}/${file}?v=${v || ''}`;
+
+async function loadTour() {
+  try {
+    if (MODE === 'remote') {
+      const res = await gh(`contents/data/tour.json?ref=${BRANCH}&t=${Date.now()}`);
+      if (res.ok) {
+        const meta = await res.json();
+        tourSha = meta.sha;
+        const bytes = Uint8Array.from(atob(meta.content.replace(/\n/g, '')), c => c.charCodeAt(0));
+        tourData = JSON.parse(new TextDecoder().decode(bytes));
+      } else tourData = {};
+    } else {
+      const res = await fetch('/data/tour.json?t=' + Date.now());
+      tourData = res.ok ? await res.json() : {};
+    }
+  } catch { tourData = {}; }
+  renderTour();
+}
+
+async function saveTour(msg) {
+  try {
+    if (MODE === 'remote') {
+      const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(tourData, null, 2))));
+      const r = await putFile('data/tour.json', b64, msg || '360도 투어 수정', tourSha);
+      tourSha = r.content.sha;
+    } else {
+      const res = await fetch('/api/tour', {
+        method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(tourData),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || '저장 실패');
+    }
+    toast('저장했습니다' + (MODE === 'remote' ? ' — 1~2분 후 사이트 반영' : ''));
+  } catch (err) { toast('⚠️ ' + err.message); }
+}
+
+function renderTour() {
+  const card = $('tour-card');
+  card.style.display = current === 'gallery' ? 'none' : '';
+  if (current === 'gallery' || !tourData) return;
+  const t = tourRoom();
+  $('te-map').hidden = !t.layout;
+  $('te-nomap').hidden = !!t.layout;
+  if (t.layout) $('te-img').src = tourUrl(t.layout, t.v);
+
+  $('te-dots').innerHTML = t.spots.map(s => `
+    <button type="button" class="te-dot${s.id === teSel ? ' sel' : ''}${s.file ? '' : ' nofile'}" data-id="${s.id}"
+      style="left:${s.x}%;top:${s.y}%" title="${escAttr(s.name)}">${s.id}</button>`).join('');
+  $('te-dots').querySelectorAll('.te-dot').forEach(dragSpot);
+
+  $('te-list').innerHTML = t.spots.length ? t.spots.map(s => `
+    <div class="te-row${s.id === teSel ? ' sel' : ''}" data-id="${s.id}">
+      <span class="te-no">${s.id}</span>
+      <input class="te-name" value="${escAttr(s.name)}" placeholder="위치 이름">
+      ${s.file
+        ? `<img class="te-thumb" src="${tourUrl(s.file, s.v)}" alt="">`
+        : '<span class="te-thumb te-none">사진 없음</span>'}
+      <label class="te-btn">📷 ${s.file ? '바꾸기' : '360 사진'}<input type="file" accept="image/*"></label>
+      <button type="button" class="te-btn te-dirbtn" ${s.file ? '' : 'disabled'}>🧭 방향${s.dirSet ? ' ✓' : ''}</button>
+      <button type="button" class="te-del" title="위치 삭제">✕</button>
+    </div>`).join('') : '<div class="empty">도면에서 촬영 위치를 눌러 추가하세요.</div>';
+
+  $('te-list').querySelectorAll('.te-row').forEach(row => {
+    const s = t.spots.find(x => x.id === +row.dataset.id);
+    row.querySelector('.te-name').onchange = e => { s.name = e.target.value.trim() || `위치 ${s.id}`; saveTour('360도 투어 위치 이름'); renderTour(); };
+    row.querySelector('input[type=file]').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) uploadSpotPano(s, f); };
+    row.querySelector('.te-dirbtn').onclick = () => openDirection(s);
+    row.querySelector('.te-del').onclick = () => deleteSpot(s);
+  });
+}
+
+// 도면 빈 곳을 누르면 위치 추가
+$('te-map').addEventListener('click', e => {
+  if (e.target.closest('.te-dot')) return;
+  const r = $('te-img').getBoundingClientRect();
+  const name = prompt('촬영 위치 이름 (예: 실내, 캐노피·바비큐, 작은방)');
+  if (name === null) return;
+  const t = tourRoom();
+  const id = t.spots.reduce((m, s) => Math.max(m, s.id), 0) + 1;
+  t.spots.push({
+    id, name: name.trim() || `위치 ${id}`, north: 0, file: null,
+    x: +(((e.clientX - r.left) / r.width) * 100).toFixed(1),
+    y: +(((e.clientY - r.top) / r.height) * 100).toFixed(1),
+  });
+  teSel = id;
+  saveTour('360도 투어 위치 추가');
+  renderTour();
+});
+
+// 점을 끌어서 위치 옮기기 (그냥 누르면 선택)
+function dragSpot(dot) {
+  dot.onpointerdown = e => {
+    e.preventDefault();
+    dot.setPointerCapture(e.pointerId);
+    const s = tourRoom().spots.find(x => x.id === +dot.dataset.id);
+    const r = $('te-img').getBoundingClientRect();
+    let moved = false;
+    dot.onpointermove = ev => {
+      moved = true;
+      s.x = +Math.min(100, Math.max(0, ((ev.clientX - r.left) / r.width) * 100)).toFixed(1);
+      s.y = +Math.min(100, Math.max(0, ((ev.clientY - r.top) / r.height) * 100)).toFixed(1);
+      dot.style.left = s.x + '%'; dot.style.top = s.y + '%';
+    };
+    dot.onpointerup = () => {
+      dot.onpointermove = dot.onpointerup = null;
+      teSel = s.id;
+      if (moved) saveTour('360도 투어 위치 이동');
+      renderTour();
+    };
+  };
+}
+
+async function deleteSpot(s) {
+  if (!confirm(`${s.id}번 "${s.name}" 위치를 삭제할까요?` + (s.file ? '\n(이 위치의 360도 사진도 지워집니다)' : ''))) return;
+  try {
+    if (s.file) {
+      if (MODE === 'remote') {
+        if (remoteFiles[s.file]) await deleteRemoteFile(`${mediaDirPath()}/${s.file}`, remoteFiles[s.file].sha, '360도 사진 삭제');
+      } else {
+        await fetch(`/api/delete?room=${current}&file=${s.file}`, { method: 'POST', headers: authHeaders() });
+      }
+    }
+    const t = tourRoom();
+    t.spots = t.spots.filter(x => x !== s);
+    await saveTour('360도 투어 위치 삭제');
+  } catch (err) { toast('⚠️ ' + err.message); }
+  if (MODE === 'remote') loadMedia();
+  renderTour();
+}
+
+function imageSize(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve([img.width, img.height]); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('이미지를 읽을 수 없습니다 (HEIC 등 미지원 형식일 수 있어요)')); };
+    img.src = url;
+  });
+}
+
+// 투어 사진 · 도면 업로드 (원격 모드는 GitHub, 아니면 서버)
+async function uploadTourFile(file, blob, type, no) {
+  if (MODE === 'remote') {
+    await putFile(`${mediaDirPath()}/${file}`, await blobToBase64(blob), `360도 투어 ${file} 업로드`, remoteFiles[file]?.sha);
+    loadMedia(); // 파일 버전(sha) 새로 받기
+  } else {
+    const res = await fetch(`/api/upload?room=${current}&type=${type}${no ? '&no=' + no : ''}`, { method: 'POST', headers: authHeaders(), body: blob });
+    if (!res.ok) throw new Error((await res.json()).error || '업로드 실패');
+  }
+}
+
+async function uploadSpotPano(s, file) {
+  const prog = $('te-progress'), msg = $('te-msg');
+  prog.classList.add('show');
+  try {
+    msg.textContent = '사진 확인 중...';
+    const [w, h] = await imageSize(file);
+    const ratio = w / h;
+    if ((ratio < 1.9 || ratio > 2.1)
+        && !confirm(`이 사진은 가로:세로가 2:1이 아닙니다 (${w}×${h}).\n360도 사진이 아니면 찌그러져 보일 수 있어요. 그래도 올릴까요?`)) {
+      throw new Error('업로드를 취소했습니다');
+    }
+    msg.textContent = '압축 중...';
+    const blob = await compressImage(file, 4096, 0.85);
+    msg.textContent = `${s.id}번 "${s.name}" 업로드 중... (${(blob.size / 1024 / 1024).toFixed(1)}MB)`;
+    const fname = `360-${s.id}.jpg`;
+    await uploadTourFile(fname, blob, 'pano', s.id);
+    s.file = fname;
+    s.v = Date.now();
+    await saveTour('360도 투어 사진 등록');
+    renderTour();
+    if (!s.dirSet) toast('업로드 완료! 이제 🧭 방향 버튼으로 방향을 맞춰 주세요');
+  } catch (err) { toast('⚠️ ' + err.message); }
+  prog.classList.remove('show'); msg.textContent = '';
+}
+
+$('te-layout-input').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const t = tourRoom();
+  if (t.spots.length && !confirm('도면을 바꾸면 촬영 위치 점을 새 도면에 맞게 다시 옮겨야 할 수 있습니다. 바꿀까요?')) return;
+  const prog = $('te-progress'), msg = $('te-msg');
+  prog.classList.add('show');
+  try {
+    msg.textContent = '도면 업로드 중...';
+    await uploadTourFile('layout.jpg', await compressImage(file, 1600, 0.9), 'layout');
+    t.layout = 'layout.jpg';
+    t.v = Date.now();
+    await saveTour('360도 투어 도면 변경');
+    renderTour();
+  } catch (err) { toast('⚠️ ' + err.message); }
+  prog.classList.remove('show'); msg.textContent = '';
+});
+
+/* ----- 방향 맞추기: 360 사진에서 도면 위쪽(↑)을 바라보는 각도 저장 ----- */
+let dirViewer = null, dirSpot = null;
+let pnlmReady = null;
+function loadPannellum() {
+  if (!pnlmReady) {
+    pnlmReady = new Promise((resolve, reject) => {
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = 'https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css';
+      document.head.appendChild(css);
+      const js = document.createElement('script');
+      js.src = 'https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js';
+      js.onload = resolve;
+      js.onerror = () => { pnlmReady = null; reject(new Error('360도 보기를 불러오지 못했습니다')); };
+      document.head.appendChild(js);
+    });
+  }
+  return pnlmReady;
+}
+
+async function openDirection(s) {
+  try { await loadPannellum(); } catch (err) { toast('⚠️ ' + err.message); return; }
+  dirSpot = s;
+  const t = tourRoom();
+  $('te-dir-img').src = tourUrl(t.layout, t.v);
+  $('te-dir-dot').style.left = s.x + '%';
+  $('te-dir-dot').style.top = s.y + '%';
+  $('te-dir').hidden = false;
+  dirViewer = pannellum.viewer('te-dir-pano', {
+    type: 'equirectangular', panorama: tourUrl(s.file, s.v), autoLoad: true,
+    yaw: s.north || 0, hfov: 90, showZoomCtrl: false, compass: false,
+  });
+}
+function closeDirection() {
+  if (dirViewer) { dirViewer.destroy(); dirViewer = null; }
+  $('te-dir-pano').innerHTML = '';
+  $('te-dir').hidden = true;
+}
+$('te-dir-cancel').onclick = closeDirection;
+$('te-dir-ok').onclick = async () => {
+  dirSpot.north = Math.round(dirViewer.getYaw());
+  dirSpot.dirSet = true;
+  closeDirection();
+  await saveTour('360도 투어 방향 맞춤');
+  renderTour();
+};
 
 /* ---------- 요금 관리 ---------- */
 let priceData = null;
@@ -806,9 +1121,9 @@ updateChips();
 (async () => {
   MODE = await detectMode();
   if (MODE === 'local') {
-    if (TOKEN) { hideLogin(); loadMedia(); loadPrices(); loadPopupAdmin(); } else showLogin();
+    if (TOKEN) { hideLogin(); loadMedia(); loadPrices(); loadTour(); loadPopupAdmin(); } else showLogin();
   } else {
-    if (await ghCheck()) { hideLogin(); loadMedia(); loadPrices(); loadPopupAdmin(); } else showLogin();
+    if (await ghCheck()) { hideLogin(); loadMedia(); loadPrices(); loadTour(); loadPopupAdmin(); } else showLogin();
   }
 })();
 </script>
