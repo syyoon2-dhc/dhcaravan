@@ -173,7 +173,9 @@
       <input type="file" id="te-layout-input" accept="image/*">
     </label>
     <div class="progress" id="te-progress"><div class="bar"><i></i></div><p id="te-msg"></p></div>
-    <p class="hint">· 360 사진은 가로:세로 <b>2:1</b>인 360도 사진(360 카메라 · 휴대폰 360 앱)이어야 합니다.<br>· 휴대폰에서도 잘 보이도록 <b>가로 4096px</b>로 자동으로 줄여 저장됩니다.</p>
+    <p class="hint">· 360도 사진(가로:세로 <b>2:1</b>, 360 카메라 · 360 앱) 또는 <b>휴대폰 파노라마 사진</b>(갤럭시 카메라 → 파노라마)을 올리세요.<br>
+      · 파노라마는 올릴 때 좌우로 몇 도 찍었는지 물어봅니다 (한 바퀴 = 360). 위아래는 찍힌 만큼만 보입니다.<br>
+      · 휴대폰에서도 잘 보이도록 자동으로 줄여 저장됩니다 (360도 사진 가로 4096px, 파노라마 8192px).</p>
   </div>
 
   <div class="card" id="popup-card">
@@ -813,17 +815,30 @@ async function uploadSpotPano(s, file) {
     msg.textContent = '사진 확인 중...';
     const [w, h] = await imageSize(file);
     const ratio = w / h;
-    if ((ratio < 1.9 || ratio > 2.1)
-        && !confirm(`이 사진은 가로:세로가 2:1이 아닙니다 (${w}×${h}).\n360도 사진이 아니면 찌그러져 보일 수 있어요. 그래도 올릴까요?`)) {
-      throw new Error('업로드를 취소했습니다');
+    let haov = 360, vaov = 180;
+    if (ratio < 1.9 || ratio > 2.1) {
+      // 휴대폰 파노라마(갤럭시 등): 위아래가 잘린 가로로 긴 사진 → 찍은 각도를 물어서 맞춰 보여 줌
+      if (ratio < 2.1) {
+        if (!confirm(`이 사진은 가로:세로가 ${ratio.toFixed(1)}:1 입니다 (${w}×${h}).\n360도 사진이나 파노라마 사진이 아니면 이상하게 보일 수 있어요. 그래도 올릴까요?`)) {
+          throw new Error('업로드를 취소했습니다');
+        }
+      } else {
+        const ans = prompt(`파노라마 사진입니다 (${w}×${h}).\n좌우로 몇 도를 찍었나요?\n· 한 바퀴 다 돌아 찍었으면 360\n· 반 바퀴면 180`, '360');
+        if (ans === null) throw new Error('업로드를 취소했습니다');
+        haov = Math.max(60, Math.min(360, parseFloat(ans) || 360));
+        vaov = Math.min(180, Math.round(haov / ratio * 10) / 10);
+      }
     }
     msg.textContent = '압축 중...';
-    const blob = await compressImage(file, 4096, 0.85);
+    // 파노라마는 세로가 낮아서 가로 8192px 까지 (휴대폰도 보통 표시 가능, 2:1 은 4096px)
+    const blob = await compressImage(file, haov < 360 || vaov < 180 ? 8192 : 4096, 0.85);
     msg.textContent = `${s.id}번 "${s.name}" 업로드 중... (${(blob.size / 1024 / 1024).toFixed(1)}MB)`;
     const fname = `360-${s.id}.jpg`;
     await uploadTourFile(fname, blob, 'pano', s.id);
     s.file = fname;
     s.v = Date.now();
+    if (haov < 360 || vaov < 180) { s.haov = haov; s.vaov = vaov; }
+    else { delete s.haov; delete s.vaov; }
     await saveTour('360도 투어 사진 등록');
     renderTour();
     if (!s.dirSet) toast('업로드 완료! 이제 🧭 방향 버튼으로 방향을 맞춰 주세요');
@@ -870,6 +885,15 @@ function loadPannellum() {
   return pnlmReady;
 }
 
+// 파노라마(위아래 잘린 사진)면 찍힌 범위만 보이게 (js/tour.js 와 같은 설정)
+function panoView(s) {
+  const haov = s.haov || 360, vaov = s.vaov || 180;
+  if (haov >= 360 && vaov >= 180) return {};
+  const o = { haov, vaov, vOffset: 0, minPitch: -vaov / 2, maxPitch: vaov / 2, avoidShowingBackground: true };
+  if (haov < 360) { o.minYaw = -haov / 2; o.maxYaw = haov / 2; }
+  return o;
+}
+
 async function openDirection(s) {
   try { await loadPannellum(); } catch (err) { toast('⚠️ ' + err.message); return; }
   dirSpot = s;
@@ -879,7 +903,7 @@ async function openDirection(s) {
   $('te-dir-dot').style.top = s.y + '%';
   $('te-dir').hidden = false;
   dirViewer = pannellum.viewer('te-dir-pano', {
-    type: 'equirectangular', panorama: tourUrl(s.file, s.v), autoLoad: true,
+    type: 'equirectangular', panorama: tourUrl(s.file, s.v), autoLoad: true, ...panoView(s),
     yaw: s.north || 0, hfov: 90, showZoomCtrl: false, compass: false,
   });
 }

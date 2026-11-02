@@ -42,6 +42,14 @@ const DhcTour = (() => {
   // 도면 위 a → b 방향 (도면 위쪽 = 0°, 시계 방향)
   const bearing = (a, b) => Math.atan2((b.x - a.x) * mapW, -(b.y - a.y) * mapH) * 180 / Math.PI;
   // 지금 보고 있는 방향 (도면 기준)
+  // 휴대폰 파노라마(위아래 잘린 사진): 찍힌 범위만 보이게 (haov/vaov 는 관리자 업로드 때 저장)
+  function panoView(s) {
+    const haov = s.haov || 360, vaov = s.vaov || 180;
+    if (haov >= 360 && vaov >= 180) return {};
+    const o = { haov, vaov, vOffset: 0, minPitch: -vaov / 2, maxPitch: vaov / 2, avoidShowingBackground: true };
+    if (haov < 360) { o.minYaw = -haov / 2; o.maxYaw = haov / 2; }
+    return o;
+  }
   const viewBearing = () => norm(viewer.getYaw() - (cur.north || 0));
 
   // 다른 위치로 이동 — facing: 도면 기준으로 바라볼 방향
@@ -97,9 +105,10 @@ const DhcTour = (() => {
         type: 'equirectangular',
         panorama: `images/rooms/${room.id}/${s.file}?v=${s.v || ''}`,
         yaw: s.north || 0,
+        ...panoView(s),
         // 360 화면 안에 다른 위치로 가는 표시 (그쪽 방향으로 바라보며 이동)
         hotSpots: spots.filter(o => o !== s).map(o => ({
-          type: 'scene', pitch: -15, yaw: norm(bearing(s, o) + (s.north || 0)),
+          type: 'scene', pitch: -Math.min(15, (s.vaov || 180) / 4), yaw: norm(bearing(s, o) + (s.north || 0)),
           text: `${o.name}(으)로 이동`,
           clickHandlerFunc: () => go(o, bearing(s, o)),
         })),
