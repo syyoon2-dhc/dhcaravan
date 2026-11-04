@@ -212,44 +212,48 @@
         "name": "큰방",
         "x": 26.1,
         "y": 53.8,
-        "north": 0,
+        "north": -139,
         "file": "360-2.jpg",
         "v": 1793774760702,
         "haov": 360,
-        "vaov": 107.6
+        "vaov": 107.6,
+        "dirSet": true
       },
       {
         "id": 3,
         "name": "화장실1",
         "x": 12.2,
         "y": 12.4,
-        "north": 0,
+        "north": -135,
         "file": "360-3.jpg",
         "v": 1793774777679,
         "haov": 360,
-        "vaov": 101.8
+        "vaov": 101.8,
+        "dirSet": true
       },
       {
         "id": 4,
         "name": "작은방",
         "x": 67.1,
         "y": 44.4,
-        "north": 0,
+        "north": -143,
         "file": "360-4.jpg",
         "v": 1793774785787,
         "haov": 360,
-        "vaov": 99.5
+        "vaov": 99.5,
+        "dirSet": true
       },
       {
         "id": 5,
         "name": "화장실2",
         "x": 87.1,
         "y": 12.4,
-        "north": 0,
+        "north": -141,
         "file": "360-5.jpg",
         "v": 1793774790585,
         "haov": 360,
-        "vaov": 109.8
+        "vaov": 109.8,
+        "dirSet": true
       },
       {
         "id": 6,
