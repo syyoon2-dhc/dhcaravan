@@ -65,16 +65,24 @@
         "name": "실내",
         "x": 49.8,
         "y": 33.1,
-        "north": 0,
-        "file": null
+        "north": -135,
+        "file": "360-1.jpg",
+        "v": 1793773608013,
+        "haov": 360,
+        "vaov": 103.6,
+        "dirSet": true
       },
       {
         "id": 2,
         "name": "캐노피·바비큐",
         "x": 47.4,
         "y": 79.4,
-        "north": 0,
-        "file": null
+        "north": -144,
+        "file": "360-2.jpg",
+        "v": 1793773617359,
+        "haov": 360,
+        "vaov": 104.6,
+        "dirSet": true
       }
     ]
   },
