@@ -1027,6 +1027,42 @@ def lookup(code, phone):
         'deadline': fmt_deadline(rows[0]['deadline']) if pending else '',
         'bank': settings['bank'] if pending else '', 'phone': settings['phone'],
         'refundPolicy': refund_policy_text(settings),
+        'voucher': voucher(rows, settings, mask_phone=True),
+    }
+
+
+BUSINESS = {'name': '동해카라반펜션', 'address': '울산광역시 울주군 온산읍 강양길 162', 'bizNo': '120-13-01206'}
+
+
+def voucher(rows, settings=None, mask_phone=False):
+    """예약확인증 내용 (손님 예약조회 · 관리자 화면 공통). 손님용은 휴대폰 가운데 자리를 가림"""
+    settings = settings or load_settings()
+    names = {r['id']: r['name'] for r in load_prices()['rooms']}
+    live = [r for r in rows if r['status'] != 'cancelled']
+    statuses = {r['status'] for r in live}
+    status = 'cancelled' if not live else 'pending' if 'pending' in statuses else 'confirmed'
+    use = live or rows
+    phone = rows[0]['phone_fmt']
+    if mask_phone and phone.count('-') == 2:
+        a, _, c = phone.split('-')
+        phone = f'{a}-****-{c}'
+    paid_at = max((r['paid_at'] or '' for r in use), default='')
+    total, paid = sum(r['total'] for r in use), sum(r['paid'] for r in use)
+    return {
+        'code': rows[0]['group_code'] or rows[0]['code'], 'status': status, 'status_label': STATUS_LABEL[status],
+        'name': rows[0]['name'], 'phone': phone,
+        'checkin': rows[0]['checkin'], 'checkout': rows[0]['checkout'], 'nights': rows[0]['nights'],
+        'items': [{'room_name': names.get(r['room_id'], r['room_id']), 'guests': r['guests'], 'total': r['total'],
+                   'status': r['status'], 'status_label': r['status_label'], 'options': r['options']} for r in rows],
+        'total': total, 'paid': paid, 'balance': max(total - paid, 0) if status != 'cancelled' else 0,
+        'payMethod': rows[0]['pay_method'], 'paidAt': paid_at[:16],
+        'deadline': fmt_deadline(rows[0]['deadline']) if status == 'pending' else '',
+        'bank': settings['bank'] if status == 'pending' else '',
+        'refund': sum(r['refund'] for r in rows) if status == 'cancelled' else 0,
+        'request': rows[0]['request'], 'createdAt': rows[0]['created_at'][:16],
+        'issuedAt': datetime.now().strftime('%Y-%m-%d %H:%M'),
+        'notice': settings['notice'], 'refundPolicy': refund_policy_text(settings),
+        'business': dict(BUSINESS, phone=settings['phone']),
     }
 
 
@@ -2224,6 +2260,13 @@ def handle_admin(method, path, query, body):
                 r = get_reservation(int(q('id', '0')))
                 group = group_rows(r['group_code']) if r['group_code'] else [r]
             return 200, {'item': r, 'group': group}
+        if path == '/api/bk/voucher':
+            with _lock:
+                r = get_reservation(int(q('id', '0')))
+                if r['status'] == 'block':
+                    raise BookingError('예약막음은 확인증이 없습니다')
+                rows = group_rows(r['group_code']) if r['group_code'] else [r]
+            return 200, voucher(rows)
         if path == '/api/bk/visits':
             return 200, visit_stats(q('days', '30'))
         if path == '/api/bk/stats':

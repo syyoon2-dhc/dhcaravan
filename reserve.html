@@ -249,6 +249,7 @@
 
 <script src="js/booking-config.js"></script>
 <script src="js/visit.js"></script>
+<script src="js/voucher.js"></script>
 <script>
 const API = (window.DHC_API_BASE || '').replace(/\/$/, '');
 const $ = id => document.getElementById(id);
@@ -606,7 +607,9 @@ $('lk-btn').onclick = async () => {
         <table class="sum-table" style="margin-top:8px">${rows}<tr class="tot"><td colspan="2">합계</td><td>${won(r.total)}원</td></tr></table>
         ${r.bank ? `<div class="bank">입금 계좌 <b>${esc(r.bank)}</b><br>입금 기한 <b style="color:var(--red)">${esc(r.deadline)}까지</b></div>` : ''}
       </div>
+      <button class="btn" id="vc-open" style="width:100%;margin-bottom:8px">📄 예약확인증 보기 · 저장</button>
       ${r.canCancel ? `<button class="btn btn-line" id="cx-open" style="width:100%">예약 취소하기</button><div id="cx-area"></div>` : ''}`;
+    $('vc-open').onclick = () => DhcVoucher.open(r.voucher);
     if (r.canCancel) $('cx-open').onclick = () => showCancel(r);
   } catch (e) { $('lk-err').textContent = e.message; }
 };

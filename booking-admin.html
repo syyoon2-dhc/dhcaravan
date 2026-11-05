@@ -634,6 +634,7 @@
 <div class="chart-tip" id="tip"></div>
 <div class="toast" id="toast"></div>
 
+<script src="js/voucher.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const won = n => Number(n || 0).toLocaleString('ko-KR');
@@ -1546,6 +1547,7 @@ async function openDetail(id) {
   if (r.status === 'confirmed') html += `<button class="btn gray" data-act="to-pending">입금대기로 되돌리기</button>`;
   if (r.refund_status === 'due') html += `<button class="btn green" data-act="refund-done">✓ 환불완료 처리</button>`;
   if (r.status === 'cancelled') html += `<button class="btn gray" data-act="restore">예약 복구 (입금대기로)</button>`;
+  if (r.status !== 'block') html += `<button class="btn line" data-act="voucher">📄 예약확인증</button>`;
   if (r.status !== 'block') html += `<button class="btn line" data-act="sms">✉️ 문자</button>`;
   html += `<button class="btn line" data-act="edit">✏️ 수정</button>`;
   if (r.phone) html += `<button class="btn line" data-act="customer">👤 고객정보</button>`;
@@ -1559,6 +1561,7 @@ async function openDetail(id) {
     if (act === 'confirm') return actConfirm(r, same);
     if (act === 'cancel') return actCancel(r, same);
     if (act === 'sms') return actSms(r);
+    if (act === 'voucher') { try { DhcVoucher.open(await api('/api/bk/voucher?id=' + r.id)); } catch (err) { toast('⚠️ ' + err.message); } return; }
     if (act === 'edit') return openForm(r);
     if (act === 'customer') return openCustomer(r.phone);
     if (act === 'refund-done') { if (!confirm('환불 입금을 마쳤나요?')) return; try { await api('/api/bk/refund-done', { ids: [r.id] }); toast('환불완료 처리했습니다'); openDetail(r.id); } catch (err) { toast('⚠️ ' + err.message); } return; }
