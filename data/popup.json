@@ -1,8 +1,8 @@
 {
-  "enabled": false,
-  "title": "",
-  "body": "",
-  "image": "",
+  "enabled": true,
+  "title": "일출보기 이벤트",
+  "body": "11월7일(토) ~ 12월19일(토)\n주말요금 평일 요금적용\n",
+  "image": "images/popup.jpg",
   "link": "",
   "linkText": "예약하러 가기"
 }
