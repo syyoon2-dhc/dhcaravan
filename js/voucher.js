@@ -103,21 +103,48 @@
 
   function close() { document.getElementById('dv-wrap')?.remove(); document.body.classList.remove('dv-open'); }
 
+  async function makeImage() {
+    if (!window.html2canvas) await loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
+    const canvas = await html2canvas(document.getElementById('dv-doc'), { scale: 2, backgroundColor: '#fff', useCORS: true });
+    return new Promise(r => canvas.toBlob(r, 'image/png'));
+  }
+
+  function download(blob, name) {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
+
   async function saveImage(v, btn) {
+    const label = btn.textContent;
     btn.disabled = true; btn.textContent = '만드는 중…';
     try {
-      if (!window.html2canvas) await loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
-      const canvas = await html2canvas(document.getElementById('dv-doc'), { scale: 2, backgroundColor: '#fff', useCORS: true });
-      const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+      const blob = await makeImage();
       const file = new File([blob], `예약확인증_${v.code}.png`, { type: 'image/png' });
       if (navigator.canShare && navigator.canShare({ files: [file] }) && /Mobi|Android|iPhone/i.test(navigator.userAgent)) {
         await navigator.share({ files: [file], title: '예약확인증' }).catch(() => {});
-      } else {
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
-        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-      }
+      } else download(blob, file.name);
     } catch (e) { alert('이미지를 만들지 못했습니다. [인쇄 · PDF 저장]을 이용해 주세요.'); }
-    btn.disabled = false; btn.textContent = '📷 이미지 저장';
+    btn.disabled = false; btn.textContent = label;
+  }
+
+  // 카톡 보내기: 휴대폰은 공유 창(카카오톡 선택), PC 는 이미지를 클립보드에 복사 → 카톡 PC 대화창에 Ctrl+V
+  async function shareKakao(v, btn) {
+    const label = btn.textContent;
+    btn.disabled = true; btn.textContent = '만드는 중…';
+    try {
+      const blob = await makeImage();
+      const file = new File([blob], `예약확인증_${v.code}.png`, { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file] }); } catch (e) { if (e.name !== 'AbortError') throw e; }
+      } else if (navigator.clipboard && window.ClipboardItem) {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        alert('예약확인증 이미지를 복사했습니다.\n카카오톡 대화창에서 Ctrl+V (붙여넣기) 하세요.');
+      } else {
+        download(blob, file.name);
+        alert('이미지 파일을 내려받았습니다. 카카오톡 대화창에 끌어다 놓으세요.');
+      }
+    } catch (e) { alert('카톡 보내기를 못 했습니다. [📷 이미지 저장] 후 직접 보내 주세요.'); }
+    btn.disabled = false; btn.textContent = label;
   }
 
   function open(v) {
@@ -128,11 +155,13 @@
     const wrap = document.createElement('div');
     wrap.id = 'dv-wrap';
     wrap.innerHTML = `<div class="dv-bar"><button class="dv-main" data-a="print">🖨 인쇄 · PDF 저장</button>
+      <button data-a="kakao" style="background:#fee500;color:#191919">💬 카톡 보내기</button>
       <button data-a="img">📷 이미지 저장</button><button data-a="close">✕ 닫기</button></div><div id="dv-doc">${html(v)}</div>`;
     wrap.onclick = e => {
       const a = e.target.dataset.a;
       if (e.target === wrap || a === 'close') close();
       else if (a === 'print') window.print();
+      else if (a === 'kakao') shareKakao(v, e.target);
       else if (a === 'img') saveImage(v, e.target);
     };
     document.body.appendChild(wrap);

@@ -253,6 +253,24 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(400, {'error': f'파일을 읽을 수 없습니다 ({e})'})
             return self._json(200, result)
 
+        # ---------- 땡큐캠핑 예약 이관 파일 (CSV 원본 그대로 받음, dry=1 이면 미리 보기만) ----------
+        if parsed.path == '/api/bk/import-thankq':
+            if not self._authed():
+                return self._json(401, {'error': '로그인이 필요합니다'})
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+            except ValueError:
+                length = 0
+            if length <= 0 or length > MAX_PHOTO:
+                return self._json(400, {'error': '파일이 비어 있거나 너무 큽니다'})
+            try:
+                result = booking.import_thankq(self.rfile.read(length), dry=query.get('dry', [''])[0] == '1')
+            except booking.BookingError as e:
+                return self._json(400, {'error': str(e)})
+            except Exception as e:  # 손상된 파일 등
+                return self._json(400, {'error': f'파일을 읽을 수 없습니다 ({e})'})
+            return self._json(200, result)
+
         # ---------- 예약 API (손님용 / 관리자용) ----------
         if parsed.path.startswith(('/api/public/', '/api/bk/')):
             body = self._read_body()

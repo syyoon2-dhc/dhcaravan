@@ -1471,8 +1471,51 @@ def mask_name(name):
     return name[0] + '*' * max(1, len(name) - 2) + (name[-1] if len(name) > 2 else '')
 
 
+def past_visits_text(rows, limit=5):
+    """단골 손님이면 지난 예약(같은 휴대폰, 이번 입실일 전, 취소 제외)을 최근 순으로 — 새 예약 텔레그램 알림 아래에 붙임"""
+    r = rows[0]
+    if not r.get('phone'):
+        return ''
+    names = {x['id']: x['name'] for x in load_prices()['rooms']}
+    with _lock:
+        past = db().execute(
+            "SELECT group_code, code, room_id, checkin, checkout, total, source FROM reservations "
+            "WHERE phone=? AND status='confirmed' AND checkin < ? AND group_code != ? ORDER BY checkin DESC, id",
+            (r['phone'], r['checkin'], r['group_code'] or r['code'])).fetchall()
+    visits = {}
+    for p in past:  # 예약번호(그룹) 하나 = 방문 1회
+        v = visits.setdefault(p['group_code'] or p['code'], {'checkin': p['checkin'], 'checkout': p['checkout'],
+                                                            'rooms': [], 'total': 0, 'source': p['source']})
+        v['rooms'].append(names.get(p['room_id'], p['room_id']))
+        v['total'] += p['total']
+    if not visits:
+        return ''
+    items = sorted(visits.values(), key=lambda v: v['checkin'], reverse=True)
+    lines = [f'⭐ 단골 손님 — 지난 예약 {len(items)}회 (합계 {sum(v["total"] for v in items):,}원)']
+    for v in items[:limit]:
+        nights = (date.fromisoformat(v['checkout']) - date.fromisoformat(v['checkin'])).days
+        lines.append(f'· {v["checkin"][2:].replace("-", ".")} {", ".join(v["rooms"])} {nights}박 {v["total"]:,}원')
+    if len(items) > limit:
+        lines.append(f'· … 외 {len(items) - limit}회 (첫 방문 {items[-1]["checkin"][:4]}년)')
+    return '\n'.join(lines)
+
+
 def admin_detail_text(kind, rows, settings):
-    """사장님 텔레그램 알림 — 운영관리에서 고친 문구(tgTemplates) 사용, 비어 있으면 기본 문구"""
+    """사장님 텔레그램 알림 — 운영관리에서 고친 문구(tgTemplates) 사용, 비어 있으면 기본 문구
+    새 예약(admin) 알림에는 단골 손님의 지난 예약 기록을 덧붙임"""
+    text = _admin_detail_body(kind, rows, settings)
+    if kind == 'admin':
+        try:
+            hist = past_visits_text(rows)
+        except Exception as e:  # 기록 조회가 실패해도 알림은 보냄
+            print('[지난 예약 조회 오류]', e)
+            hist = ''
+        if hist:
+            text += '\n\n' + hist
+    return text
+
+
+def _admin_detail_body(kind, rows, settings):
     tpl = (settings.get('tgTemplates') or {}).get(kind) or DEFAULT_SETTINGS['tgTemplates'].get(kind)
     if tpl:
         return render_template(tpl, rows, settings, drop_empty=True)
@@ -1952,6 +1995,105 @@ def import_customers(data, filename):
                                  (name, phone))
         db().commit()
     return {'added': added, 'existing': updated, 'skipped': skipped}
+
+
+THANKQ_PAY = {'무통장입금': '무통장', '카드': '땡큐캠핑', '가상계좌': '땡큐캠핑'}
+
+
+def _read_csv(data):
+    import csv
+    for enc in ('utf-8-sig', 'cp949'):
+        try:
+            return list(csv.DictReader(io.StringIO(data.decode(enc))))
+        except UnicodeDecodeError:
+            continue
+    raise BookingError('파일 글자 인코딩을 읽을 수 없습니다')
+
+
+def import_thankq(data, dry=False):
+    """땡큐캠핑 입금현황을 합친 등록 파일(땡큐캠핑_예약이관.csv)로 지난 · 앞으로의 예약과 고객을 한 번에 등록
+    - 이미 있는 예약(같은 객실 · 입실일 + 같은 휴대폰 또는 이름)은 건너뜀 → 같은 파일을 두 번 올려도 안전
+    - 앞으로 입실할 예약이 다른 예약과 겹치면 등록하지 않고 목록으로 알려 줌
+    - 보관 기간(KEEP_YEARS)이 지난 예약은 이름 · 연락처 없이 날짜 · 객실 · 금액만 (매출 통계용)
+    - 손님 문자는 보내지 않음(no_sms). dry=True 면 저장하지 않고 결과만 미리 보기"""
+    rows = _read_csv(data)
+    need = ('예약자', '휴대폰', '객실ID', '입실일', '퇴실일', '결제금액', '신청일')
+    if not rows or any(k not in rows[0] for k in need):
+        raise BookingError('땡큐캠핑 예약이관 파일이 아닙니다 (제목 줄: ' + ', '.join(need) + ' 필요)')
+    settings, today = load_settings(), date.today()
+    cut = (today - timedelta(days=366 * KEEP_YEARS)).isoformat()
+    num = lambda s: int(re.sub(r'[^\d-]', '', str(s or '')) or 0)
+    res = {'total': len(rows), 'added': 0, 'dup': 0, 'conflict': [], 'old': 0, 'customers': 0, 'future': 0, 'error': []}
+    plan = {}  # 같은 손님(휴대폰 + 이름) · 같은 날짜 · 같은 신청일 = 예약번호 하나로 묶음
+    with _lock:
+        for i, r in enumerate(rows, 2):
+            try:
+                ci, co = parse_date(r['입실일'], '입실일'), parse_date(r['퇴실일'], '퇴실일')
+                applied = parse_date(r['신청일'], '신청일')
+            except BookingError as e:
+                res['error'].append(f'{i}번째 줄: {e}')
+                continue
+            name, room = str(r['예약자']).strip()[:30], str(r['객실ID']).strip()
+            phone = norm_phone(r['휴대폰'])
+            if len(phone) == 10 and phone.startswith('1'):  # 엑셀에서 열었다 저장하면 앞 0 이 빠짐
+                phone = '0' + phone
+            if not valid_mobile(phone):
+                phone = ''
+            dup = db().execute(
+                "SELECT 1 FROM reservations WHERE room_id=? AND checkin=? AND status != 'cancelled' "
+                "AND ((phone != '' AND phone=?) OR name=? OR (name='(파기)' AND checkout=? AND total=?))",
+                (room, ci.isoformat(), phone, name, co.isoformat(), num(r['결제금액']))).fetchone()
+            if dup:
+                res['dup'] += 1
+                continue
+            if co > today:
+                res['future'] += 1
+                if not is_available(settings, room, ci.isoformat(), co.isoformat()):
+                    res['conflict'].append(f'{ci.isoformat()} {r.get("객실") or room} {name} — 이미 다른 예약이 있음')
+                    continue
+            plan.setdefault((phone, name, ci, co, applied), []).append((r, name, phone, room, ci, co, applied))
+        if dry:
+            res['added'] = sum(len(v) for v in plan.values())
+            res['old'] = sum(len(v) for v in plan.values() if v[0][5].isoformat() < cut)
+            return res
+        used = set()
+        for items in plan.values():
+            applied = items[0][6]
+            while True:
+                base = 'TQ' + applied.strftime('%y%m%d') + '-' + ''.join(random.choices(string.digits, k=4))
+                if base not in used and not db().execute(
+                        'SELECT 1 FROM reservations WHERE code LIKE ? OR group_code=?', (base + '%', base)).fetchone():
+                    break
+            used.add(base)
+            for k, (r, name, phone, room, ci, co, applied) in enumerate(items):
+                old = co.isoformat() < cut
+                total, listed = num(r['결제금액']), num(r.get('예약금액'))
+                memo = [f'땡큐캠핑 이관 ({r.get("땡큐경로", "")} · {r.get("결제구분", "")})']
+                if not old:
+                    memo += [f'{t}: {r[t]}' for t in ('차량번호', '추가이용', '할인정보') if (r.get(t) or '').strip()]
+                ts = applied.isoformat() + ' 00:00:00'
+                db().execute(
+                    'INSERT INTO reservations (code, group_code, room_id, checkin, checkout, guests, name, phone, request, '
+                    'memo, options, room_amount, extra_amount, option_amount, total, paid, status, source, pay_method, '
+                    "paid_at, no_sms, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,'[]',?,?,0,?,?,'confirmed',"
+                    "'땡큐캠핑',?,?,1,?,?)",
+                    (base if len(items) == 1 else f'{base}-{k + 1}', base, room, ci.isoformat(), co.isoformat(),
+                     num(r.get('인원')), '(파기)' if old else name, '' if old else phone,
+                     '' if old else str(r.get('요청사항') or '').strip()[:500], '\n'.join(memo)[:1000],
+                     listed or total, max(0, total - listed) if listed else 0, total, total,
+                     THANKQ_PAY.get(r.get('결제구분'), '기타'), ts, ts, now_str()))
+                res['added'] += 1
+                res['old'] += int(old)
+                if phone and not old:
+                    cur = db().execute('INSERT OR IGNORE INTO customers (phone, name, created_at) VALUES (?,?,?)',
+                                       (phone, name, ts))
+                    if cur.rowcount:
+                        res['customers'] += 1
+                    else:  # 이미 있는 고객: 이름이 비었으면 채우고, 첫 방문일을 더 이른 날로
+                        db().execute("UPDATE customers SET name=CASE WHEN name='' THEN ? ELSE name END, "
+                                     'created_at=MIN(created_at, ?) WHERE phone=?', (name, ts, phone))
+        db().commit()
+    return res
 
 
 def customers_sms(phones, msg, category_all=None):
