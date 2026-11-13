@@ -130,6 +130,15 @@ DEFAULT_SETTINGS = {
         'admin_cancel': '[손님취소]{이름} {연락처} {입실} {객실} 환불{환불}원',
         'admin_expired': '[미입금 자동취소]{이름} {연락처} {객실} {입실} {금액}원',
     },
+    # 손님 문자 {환영인사} 문장 (운영관리 → 문자발송설정에서 수정). 칸을 비우면 그 경우엔 인사 줄이 빠짐
+    # {방문횟수} = 이번이 몇 번째 방문 · {지난방문} = "2025년 10월 아도라542UL" · {같은객실} = 지난번과 같은 객실 이름
+    'greetings': {
+        'first': '동해카라반펜션을 찾아주셔서 감사합니다. 바다와 함께 즐겁고 편안한 시간 보내세요.',
+        'second': '지난 {지난방문} 이용 후 다시 찾아주셔서 감사합니다.',
+        'few': '벌써 {방문횟수}번째 방문이시네요. 잊지 않고 찾아주셔서 감사합니다. (지난 방문: {지난방문})',
+        'many': '{방문횟수}번째 방문, 늘 찾아주셔서 진심으로 감사드립니다. 이번에도 편히 쉬다 가세요. (지난 방문: {지난방문})',
+        'sameRoom': '지난번과 같은 객실({같은객실})을 다시 선택해 주셨네요.',
+    },
     # 사장님 텔레그램 알림 문구 (운영관리 → 문자발송설정에서 수정). 값이 비어 있는 항목이 든 줄은 자동으로 빠짐
     'tgTemplates': {
         'admin': '🔔 새 예약 (입금대기)\n{이름} {연락처}\n{입실} ~ {퇴실} ({박}박)\n{객실상세}\n합계 {금액}원\n'
@@ -1595,34 +1604,28 @@ def past_visits(rows, settings=None):
     return sorted(visits.values(), key=lambda v: v['checkin'], reverse=True)
 
 
-FIRST_GREETING = '동해카라반펜션을 찾아주셔서 감사합니다. 바다와 함께 즐겁고 편안한 시간 보내세요.'
-
-
 def welcome_greeting(rows, settings=None):
-    """손님 문자 {환영인사}: 단골이면 방문 횟수별 감사 인사, 기록이 없으면 환영 인사
-    (2021년 이전 방문은 기록이 지워졌을 수 있어 '처음'이라는 말은 쓰지 않음)
+    """손님 문자 {환영인사}: 단골이면 방문 횟수별 감사 인사, 기록이 없으면 환영 인사 — 문장은 settings['greetings']
+    (2021년 이전 방문은 기록이 지워졌을 수 있어 기본 첫 인사에 '처음'이라는 말은 쓰지 않음)
     사장님 · 펜션 번호로 대신 등록한 예약은 빈 문자열 → 그 줄은 빠짐"""
     settings = settings or load_settings()
+    g = {**DEFAULT_SETTINGS['greetings'], **(settings.get('greetings') or {})}
     own = {norm_phone(settings.get('phone')), norm_phone(settings.get('adminPhone'))} - {''}
     if not rows[0].get('phone') or rows[0]['phone'] in own:
         return ''
     visits = past_visits(rows, settings)
     if not visits:
-        return FIRST_GREETING
+        return (g['first'] or '').strip()
     last, n = visits[0], len(visits) + 1  # n = 이번이 몇 번째 방문인지
-    y, m = int(last['checkin'][:4]), int(last['checkin'][5:7])
-    when = f'{y}년 {m}월 {", ".join(dict.fromkeys(last["rooms"]))}'
-    if n == 2:
-        text = f'지난 {when} 이용 후 다시 찾아주셔서 감사합니다.'
-    elif n <= 4:
-        text = f'벌써 {n}번째 방문이시네요. 잊지 않고 찾아주셔서 감사합니다. (지난 방문: {when})'
-    else:
-        text = f'{n}번째 방문, 늘 찾아주셔서 진심으로 감사드립니다. 이번에도 편히 쉬다 가세요. (지난 방문: {when})'
     names = {x['id']: x['name'] for x in load_prices()['rooms']}
     same = [x['room_id'] for x in rows if x['room_id'] in last['room_ids']]
+    vals = {'방문횟수': n, '같은객실': ', '.join(names.get(i, i) for i in dict.fromkeys(same)),
+            '지난방문': f'{int(last["checkin"][:4])}년 {int(last["checkin"][5:7])}월 {", ".join(dict.fromkeys(last["rooms"]))}'}
+    fill = lambda t: re.sub(r'\{([^{}]+)\}', lambda m: str(vals.get(m.group(1), m.group(0))), (t or '').strip())
+    lines = [fill(g['second'] if n == 2 else g['few'] if n <= 4 else g['many'])]
     if same:
-        text += f'\n지난번과 같은 객실({", ".join(names.get(i, i) for i in dict.fromkeys(same))})을 다시 선택해 주셨네요.'
-    return text
+        lines.append(fill(g['sameRoom']))
+    return '\n'.join(x for x in lines if x)
 
 
 def past_visits_text(rows, limit=5):
@@ -2644,6 +2647,7 @@ def handle_admin(method, path, query, body):
                          'refundPolicy': refund_policy_text(load_settings()),
                          'tgTemplateDefaults': DEFAULT_SETTINGS['tgTemplates'],
                          'templateDefaults': DEFAULT_SETTINGS['templates'],
+                         'greetingDefaults': DEFAULT_SETTINGS['greetings'],
                          'rooms': [{'id': r['id'], 'name': r['name'], 'std': r['std'], 'max': r['max'],
                                     'group': r['group']} for r in prices['rooms']],
                          'options': [{'i': o['i'], 'name': o['name'], 'detail': o.get('detail', ''),
