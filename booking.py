@@ -2092,6 +2092,18 @@ def import_thankq(data, dry=False):
                     else:  # 이미 있는 고객: 이름이 비었으면 채우고, 첫 방문일을 더 이른 날로
                         db().execute("UPDATE customers SET name=CASE WHEN name='' THEN ? ELSE name END, "
                                      'created_at=MIN(created_at, ?) WHERE phone=?', (name, ts, phone))
+        # 이 파일을 [고객 엑셀/CSV 가져오기]로 잘못 올려 들어간 고객 중 보관기간(5년) 안에 예약이 없는 번호는 지움
+        # (오늘 등록됐고 · 예약이 하나도 없고 · 분류/닉네임/메모를 따로 넣지 않은 고객만)
+        file_phones = set()
+        for r in rows:
+            p = norm_phone(r.get('휴대폰'))
+            file_phones.add('0' + p if len(p) == 10 and p.startswith('1') else p)
+        res['cleaned'] = 0
+        for p in file_phones:
+            res['cleaned'] += db().execute(
+                "DELETE FROM customers WHERE phone=? AND created_at >= ? AND nickname='' AND category='' AND memo='' "
+                "AND phone NOT IN (SELECT phone FROM reservations WHERE phone != '')",
+                (p, today.isoformat())).rowcount
         db().commit()
     return res
 

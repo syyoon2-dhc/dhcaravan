@@ -1477,7 +1477,8 @@ $('tq-import').onchange = async e => {
       + `${p.old ? `· 그중 ${p.old}건은 보관기간(5년)이 지나 이름 · 연락처 없이 매출 기록만 남습니다\n` : ''}` + extra(p) + '\n\n등록할까요? (손님 문자는 보내지 않습니다)')) return;
     toast('등록 중…');
     const r = await send(false);
-    alert(`이관 완료\n\n예약 등록: ${r.added}건\n이미 있던 예약: ${r.dup}건\n새 고객: ${r.customers}명` + extra(r));
+    alert(`이관 완료\n\n예약 등록: ${r.added}건\n이미 있던 예약: ${r.dup}건\n새 고객: ${r.customers}명`
+      + (r.cleaned ? `\n5년 지난 옛 고객 정리: ${r.cleaned}명` : '') + extra(r));
     loadCust();
   } catch (err) { toast('⚠️ ' + err.message); }
 };
