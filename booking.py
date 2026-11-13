@@ -34,6 +34,48 @@ PAY_METHODS = ('무통장', '카드', '현금', '땡큐캠핑', '기타')
 CANCEL_BY = {'user': '사용자취소', 'admin': '관리자취소', 'auto': '입금기한초과'}
 WEEKDAY = '월화수목금토일'
 
+# 예약완료 · 입실 전날 안내는 장문(LMS)으로 자세히 — 홈페이지 이용 안내와 같은 내용만 (예약번호는 문자에 넣지 않음)
+CONFIRMED_LMS = """[동해카라반펜션] 예약확정 안내
+{이름}님, 입금이 확인되어 예약이 확정되었습니다.
+
+■ 객실
+{객실상세}
+■ 입실: {입실} 오후 3시 이후
+■ 퇴실: {퇴실} 오전 11시 이전 ({박}박)
+■ 결제금액: {금액}원 (입금 {입금액}원)
+
+입·퇴실 시간 준수 부탁드립니다.
+
+※ 이용 안내
+- 카라반 및 모든 객실 안은 금연입니다. 지정된 장소를 이용해 주세요.
+- 펜션 내 무료 주차장을 이용하실 수 있습니다.
+- 바비큐 장비를 대여하시면 숯(초기 점화 후 지급) · 여유숯 · 일회용 전용석쇠 · 장갑을 함께 드립니다.
+- 추억의 월광보합 오락기는 무료로 이용하실 수 있습니다.
+- 다음 고객을 위하여 사용하신 식기류는 설거지해 주시고, 쓰레기는 분리수거장에 분리수거해 주세요.
+
+※ 예약 확인 · 취소 · 예약확인증
+예약자 이름과 휴대폰 번호로 조회하실 수 있습니다.
+https://syyoon2-dhc.github.io/dhcaravan/reserve.html#lookup
+
+도로명주소: 울산광역시 울주군 온산읍 강양길 162
+지번주소: 울산광역시 울주군 온산읍 강양리 61-2
+문의전화 {펜션전화}"""
+
+REMINDER_LMS = """[동해카라반펜션] 입실 안내
+{이름}님, 내일은 {입실} {객실} 입실일입니다.
+
+■ 입실: 오후 3시부터
+■ 퇴실: {퇴실} 오전 11시까지
+■ 주소: 울산광역시 울주군 온산읍 강양길 162
+  (지번: 강양리 61-2)
+■ 주차: 펜션 내 무료 주차장
+
+- 카라반 및 객실 안은 금연입니다.
+- 바비큐 장비를 대여하신 경우 숯은 초기 점화 후 지급해 드립니다.
+- 도착이 늦어지시면 미리 연락 부탁드립니다.
+
+조심히 오세요. 문의 {펜션전화}"""
+
 DEFAULT_SETTINGS = {
     'bookingOpen': True,           # 홈페이지 예약 받기
     'bank': '',                    # 입금 계좌 (예: 농협 000-0000-0000-00 홍길동) — 비어 있으면 예약 안 받음
@@ -75,14 +117,14 @@ DEFAULT_SETTINGS = {
     'telegram': {'enabled': False, 'botToken': '', 'chatId': ''},  # 사장님 알림은 텔레그램으로 (무료)
     'auto': {'received': True, 'confirmed': True, 'cancelled': True, 'expired': True, 'reminder': True,
              'refund_done': True, 'deposit_reminder': True},
-    'templates': {  # 단문(SMS 90바이트 = 한글 약 45자) 기준. 넘으면 장문(LMS)으로 발송
+    'templates': {  # 단문(SMS 90바이트 = 한글 약 45자) 기준. 넘으면 장문(LMS, 최대 2,000바이트)으로 발송
         'received': '[동해카라반]{금액}원 {계좌} {입금기한}까지 입금시 예약확정',
         'deposit_reminder': '[동해카라반]입금마감 1시간전입니다 {금액}원 {계좌}',
-        'confirmed': '[동해카라반]{이름}님 {입실} {객실} 예약확정\n입실15시 퇴실11시 문의{펜션전화}',
+        'confirmed': CONFIRMED_LMS,
         'expired': '[동해카라반]입금기한이 지나 {입실} 예약이 자동취소되었습니다',
         'cancelled': '[동해카라반]{입실} {객실} 예약이 취소되었습니다 문의{펜션전화}',
         'refund_done': '[동해카라반]{이름}님 환불금 {환불}원 입금완료되었습니다',
-        'reminder': '[동해카라반]내일 입실일입니다. 15시부터 입실가능. 울주군 온산읍 강양길162',
+        'reminder': REMINDER_LMS,
         'admin': '[새예약]{이름} {연락처} {객실} {입실} {박}박 {금액}원',
         'admin_cancel': '[손님취소]{이름} {연락처} {입실} {객실} 환불{환불}원',
         'admin_expired': '[미입금 자동취소]{이름} {연락처} {객실} {입실} {금액}원',
@@ -240,13 +282,25 @@ def load_settings():
                 s[k].update(v)
             else:
                 s[k] = v
-    for kind, old in OLD_TEMPLATES.items():  # 예전 기본 문구를 그대로 쓰는 중이면 새 기본 문구로 (직접 고친 문구는 그대로)
-        if s['templates'].get(kind) == old:
+    flat = lambda t: re.sub(r'\s+', '', t or '')
+    for kind, olds in OLD_TEMPLATES.items():  # 예전 기본 문구를 그대로 쓰는 중이면 새 기본 문구로 (직접 고친 문구는 그대로)
+        if flat(s['templates'].get(kind)) in {flat(o) for o in olds}:
             s['templates'][kind] = DEFAULT_SETTINGS['templates'][kind]
     return s
 
 
-OLD_TEMPLATES = {'confirmed': '[동해카라반]{이름}님 {입실} {객실} 예약확정. 입실15시 퇴실11시'}
+OLD_TEMPLATES = {  # 줄바꿈 · 띄어쓰기 차이는 무시하고 비교
+    'confirmed': [
+        '[동해카라반]{이름}님 {입실} {객실} 예약확정. 입실15시 퇴실11시',
+        '[동해카라반]{이름}님 {입실} {객실} 예약확정\n입실15시 퇴실11시 문의{펜션전화}',
+        # 2026-11-13 사장님 안내문을 넣어 쓰도록 드린 문구
+        '[동해카라반]{이름}님 {입실} {객실} 예약확정되었습니다.\n\n입실시간: 오후 3시 이후\n퇴실시간: 오전 11시 이전\n'
+        '입·퇴실 시간 준수 부탁드립니다.\n\n※ 모든 객실 안에서는 금연입니다.\n다음 고객을 위하여 사용하신 식기류는 설거지해 주시고,\n'
+        '쓰레기는 분리수거장에 분리수거해 주시길 당부드립니다.\n\n도로명주소: 울산광역시 울주군 온산읍 강양길 162\n'
+        '지번주소: 울산광역시 울주군 온산읍 강양리 61-2\n\n문의전화 {펜션전화}',
+    ],
+    'reminder': ['[동해카라반]내일 입실일입니다. 15시부터 입실가능. 울주군 온산읍 강양길162'],
+}
 
 
 def save_settings(data):
@@ -1380,6 +1434,22 @@ def aligo_call(path, fields, settings):
         return json.loads(resp.read().decode('utf-8'))
 
 
+SMS_MAX, LMS_MAX = 90, 2000  # 알리고: 단문 90바이트 · 장문 2,000바이트 (EUC-KR, 한글 2바이트)
+
+
+def fit_bytes(msg, limit):
+    """EUC-KR 바이트 기준으로 limit 를 넘으면 글자 단위로 잘라 끝에 '…'"""
+    if len(msg.encode('euc-kr', errors='replace')) <= limit:
+        return msg
+    out, n = [], 2  # '…' 자리
+    for ch in msg:
+        n += len(ch.encode('euc-kr', errors='replace'))
+        if n > limit:
+            break
+        out.append(ch)
+    return ''.join(out) + '…'
+
+
 def send_sms(phone, msg, kind='manual', reservation_id=None):
     """문자 1건 발송 후 기록. (성공 여부, 결과 메시지)"""
     settings = load_settings()
@@ -1390,7 +1460,8 @@ def send_sms(phone, msg, kind='manual', reservation_id=None):
     elif not (a.get('enabled') and a.get('key') and a.get('userId') and a.get('sender')):
         ok, result = False, '문자 발송 꺼짐 (설정에서 알리고 연동 필요) — 기록만 저장'
     else:
-        lms = len(msg.encode('euc-kr', errors='replace')) > 90  # 90바이트 넘으면 장문(LMS)
+        msg = fit_bytes(msg, LMS_MAX)  # 손님 요청사항이 길게 들어가도 발송 실패하지 않게 2,000바이트에서 자름
+        lms = len(msg.encode('euc-kr', errors='replace')) > SMS_MAX  # 90바이트 넘으면 장문(LMS)
         fields = {'sender': norm_phone(a['sender']), 'receiver': phone, 'msg': msg,
                   'msg_type': 'LMS' if lms else 'SMS'}
         if lms:
@@ -2503,6 +2574,7 @@ def handle_admin(method, path, query, body):
                          'holidays': prices.get('holidays', []), 'sources': SOURCES, 'payMethods': PAY_METHODS,
                          'refundPolicy': refund_policy_text(load_settings()),
                          'tgTemplateDefaults': DEFAULT_SETTINGS['tgTemplates'],
+                         'templateDefaults': DEFAULT_SETTINGS['templates'],
                          'rooms': [{'id': r['id'], 'name': r['name'], 'std': r['std'], 'max': r['max'],
                                     'group': r['group']} for r in prices['rooms']],
                          'options': [{'i': o['i'], 'name': o['name'], 'detail': o.get('detail', ''),

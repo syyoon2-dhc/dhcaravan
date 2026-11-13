@@ -660,6 +660,8 @@ function showCancel(r) {
   viewMonth = monthOf(INFO.today);
   loadCalendar();
 })();
+// 문자 속 링크(reserve.html#lookup)로 들어오면 바로 예약 조회 화면
+if (location.hash === '#lookup') document.querySelector('.tabs button[data-tab="lookup"]').click();
 </script>
 </body>
 </html>

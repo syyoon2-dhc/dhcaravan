@@ -697,7 +697,12 @@ function statusTag(r) {
 }
 const refundTag = r => r.refund_status === 'due' ? '<span class="st due">환불예정</span>' : r.refund_status === 'done' ? '<span class="st done">환불완료</span>' : '';
 const z = n => n ? won(n) : `<span class="zero">0</span>`;
-function byteInfo(s) { let b = 0; for (const ch of s) b += ch.charCodeAt(0) > 127 ? 2 : 1; return `${b}바이트 · ${b > 90 ? '장문(LMS)' : '단문(SMS)'}`; }
+const SMS_MAX = 90, LMS_MAX = 2000; // 알리고: 단문 90바이트 · 장문 2,000바이트 (한글 2바이트)
+const byteLen = s => { let b = 0; for (const ch of s) b += ch.charCodeAt(0) > 127 ? 2 : 1; return b; };
+function byteInfo(s) {
+  const b = byteLen(s);
+  return b <= SMS_MAX ? `${b}/${SMS_MAX}바이트 · 단문(SMS)` : b <= LMS_MAX ? `${won(b)}/${won(LMS_MAX)}바이트 · 장문(LMS)` : `⚠ ${won(b)}/${won(LMS_MAX)}바이트 — 장문 한도 초과, 줄여 주세요`;
+}
 const checkedIds = tableId => [...document.querySelectorAll(`#${tableId} input.rowchk:checked`)].map(c => c.value);
 function wireCheckAll(tableId) {
   const all = document.querySelector(`#${tableId} input.allchk`);
@@ -1872,9 +1877,16 @@ async function loadSettings(group) {
   $('t-templates').onclick = e => { const k = e.target.dataset.tgReset; if (k) document.querySelector(`[data-tgtpl="${k}"]`).value = tgd[k] || ''; };
   $('s-remind').innerHTML = Array.from({ length: 24 }, (_, h) => `<option value="${h}" ${h === s.reminderHour ? 'selected' : ''}>${h}시</option>`).join('');
   $('s-templates').innerHTML = Object.entries(TEMPLATE_LABEL).map(([k, label]) => `<div class="f">
-    <label>${k.startsWith('admin') ? label : `<span class="chk"><input type="checkbox" data-auto="${k}" ${s.auto[k] !== false ? 'checked' : ''}> 자동 발송</span> · ${label}`}</label>
-    <textarea data-tpl="${k}" rows="3">${esc(s.templates[k] || '')}</textarea><div class="hint tpl-len" data-len="${k}"></div></div>`).join('');
+    <label>${k.startsWith('admin') ? label : `<span class="chk"><input type="checkbox" data-auto="${k}" ${s.auto[k] !== false ? 'checked' : ''}> 자동 발송</span> · ${label}`}
+      <button type="button" class="btn gray sm" data-tpl-reset="${k}" style="margin-left:6px">기본 문구로</button></label>
+    <textarea data-tpl="${k}" rows="${Math.min(16, Math.max(3, (s.templates[k] || '').split('\n').length + 1))}">${esc(s.templates[k] || '')}</textarea><div class="hint tpl-len" data-len="${k}"></div></div>`).join('');
   document.querySelectorAll('[data-tpl]').forEach(t => { t.oninput = () => tplLength(t); tplLength(t); });
+  $('s-templates').onclick = e => {
+    const k = e.target.dataset.tplReset; if (!k) return;
+    const t = document.querySelector(`[data-tpl="${k}"]`);
+    if (t.value.trim() && !confirm(`'${TEMPLATE_LABEL[k]}' 문구를 기본 문구로 바꿀까요? ([설정 저장]을 눌러야 저장됩니다)`)) return;
+    t.value = (META.templateDefaults || {})[k] || ''; t.rows = Math.min(16, Math.max(3, t.value.split('\n').length + 1)); tplLength(t);
+  };
   $('s-sms-price').value = s.smsPrice; $('s-lms-price').value = s.lmsPrice; $('s-fixed').value = s.monthlyFixedCost; $('s-fee').value = s.compareFeeRate;
   $('s-peaks').innerHTML = ''; META.peakPeriods.forEach(addPeakRow);
   $('s-hol').value = META.holidays.join('\n');
@@ -1884,11 +1896,16 @@ function tplLength(t) {
   const s = META.settings;
   const sample = { 이름: '홍길동', 예약번호: 'DH261023-1234', 연락처: '010-1234-5678', 객실: '아도라542UL', 입실: '10/24(토)', 퇴실: '10/26(월)',
     박: '2', 인원: '4', 금액: '1,290,000', 잔금: '290,000', 환불: '250,000', 계좌: s.bankShort || s.bank || '기업 15912505001013 윤석영',
-    입금기한: '10/23(금) 16:35', 펜션전화: s.phone };
+    입금기한: '10/23(금) 16:35', 펜션전화: s.phone, 입금액: '1,000,000', 결제방법: '무통장', 예약경로: '홈페이지',
+    객실상세: '· 아도라542UL 4명 300,000원 (바비큐 장비(대) x1)\n· 구름 6명 400,000원', 옵션: '바비큐 장비(대) x1, 월광보합 x1',
+    요청사항: '도착이 늦을 수 있습니다', 환불계좌: '국민 123456-78-901234 홍길동' };
   const text = t.value.replace(/\{([^{}]+)\}/g, (m, k) => sample[k] ?? m);
-  let b = 0; for (const ch of text) b += ch.charCodeAt(0) > 127 ? 2 : 1;
+  const b = byteLen(text);
+  t.dataset.bytes = b;
   const el = document.querySelector(`[data-len="${t.dataset.tpl}"]`);
-  el.innerHTML = b <= 90 ? `✓ 단문 · 약 ${b}/90바이트 (8.4원)` : `<b style="color:var(--red)">⚠ 약 ${b}바이트 → 장문으로 발송 (25원). 줄여 주세요</b>`;
+  el.innerHTML = b <= SMS_MAX ? `✓ 단문 · 약 ${b}/${SMS_MAX}바이트 (${s.smsPrice}원)`
+    : b <= LMS_MAX ? `<b style="color:var(--blue-deep)">✓ 장문 · 약 ${won(b)}/${won(LMS_MAX)}바이트 (${s.lmsPrice}원) · 한글 약 ${won(Math.floor((LMS_MAX - b) / 2))}자 더 쓸 수 있음</b>`
+    : `<b style="color:var(--red)">⚠ 약 ${won(b)}/${won(LMS_MAX)}바이트 — 장문 한도 초과. 한글 약 ${won(Math.ceil((b - LMS_MAX) / 2))}자 줄여 주세요 (저장 안 됨)</b>`;
 }
 
 function addRuleRow(r = {}) {
@@ -1931,6 +1948,8 @@ document.querySelectorAll('[name=s-omode]').forEach(r => r.onchange = syncOpenMo
 $('s-save').onclick = async () => {
   const units = {}; document.querySelectorAll('[data-unit]').forEach(i => { units[i.dataset.unit] = +i.value || 1; });
   const templates = {}; document.querySelectorAll('[data-tpl]').forEach(t => { templates[t.dataset.tpl] = t.value; });
+  const over = [...document.querySelectorAll('[data-tpl]')].filter(t => +t.dataset.bytes > LMS_MAX);
+  if (over.length) { over[0].focus(); return toast(`⚠️ ${TEMPLATE_LABEL[over[0].dataset.tpl]} 문구가 장문 한도(2,000바이트)를 넘습니다. 줄여 주세요`); }
   const auto = {}; document.querySelectorAll('[data-auto]').forEach(c => { auto[c.dataset.auto] = c.checked; });
   const refundRules = [...document.querySelectorAll('.rule-row')].map(d => ({ days: d.querySelector('.rl-d').value, rate: d.querySelector('.rl-r').value })).filter(r => r.days !== '' && r.rate !== '');
   const body = {
