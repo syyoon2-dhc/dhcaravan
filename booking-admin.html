@@ -403,6 +403,23 @@
     </div>
   </section>
 
+  <section id="tab-skpi" hidden>
+    <div class="card">
+      <div class="toolbar"><b>운영지표 — 연도별 추이</b><span class="hint">입실일 기준 · 땡큐캠핑 이관 예약 포함</span><span class="grow"></span>
+        <select id="kp-metric"><option value="revenue">매출</option><option value="count">예약건수</option><option value="nights">숙박(박)</option><option value="adr">1박 평균</option><option value="occupancy">가동률</option><option value="repeat_rate">재방문율</option></select></div>
+      <div class="summary" id="kp-ytd"></div>
+      <div class="chart" id="kp-chart"></div>
+      <div class="tbl-wrap" style="margin-top:18px"><table class="list" id="kp-table"></table></div>
+      <h4 style="margin:22px 0 6px">월별 매출 (연도 비교)</h4>
+      <div class="tbl-wrap"><table class="list" id="kp-month"></table></div>
+      <h4 style="margin:22px 0 6px">객실별 매출</h4>
+      <div class="tbl-wrap"><table class="list" id="kp-room"></table></div>
+      <p class="hint" style="margin-top:8px">· 1박 평균 = 매출 ÷ 숙박(박). 가동률 = 지금 객실들의 숙박(박) ÷ (일수 × 객실 수), 올해는 오늘까지.<br>
+        · 고객 · 재방문율은 휴대폰 번호가 있는 예약만 셉니다. 보관기간(5년)이 지난 예약은 개인정보가 지워져 비어 있습니다. 재방문 = 그 전 해에 이미 온 적 있는 고객.<br>
+        · 예약~입실 = 예약한 날부터 입실일까지 평균 일수. 주말 = 금 · 토 입실 비중. 사장님 번호로 대신 등록한 예약은 한 고객으로 셉니다.</p>
+    </div>
+  </section>
+
   <!-- ======================= 고객관리 ======================= -->
   <section id="tab-cust" hidden>
     <div class="card">
@@ -745,7 +762,7 @@ $('logout-btn').onclick = () => { TOKEN = ''; sessionStorage.removeItem('dhc_tok
 /* ---------- 메뉴 (땡큐캠핑 관리자와 같은 구성) ---------- */
 const MENUS = [
   { key: 'rsv', label: '예약관리', tabs: [['cal', '예약현황'], ['pay', '입금현황'], ['refund', '환불현황'], ['cancel', '취소현황'], ['monthly', '월별현황'], ['opts', '추가신청현황']] },
-  { key: 'sales', label: '매출관리', tabs: [['smonth', '월별매출현황'], ['sday', '일별매출현황'], ['scal', '예약정산달력'], ['scost', '비용·정산자료']] },
+  { key: 'sales', label: '매출관리', tabs: [['smonth', '월별매출현황'], ['sday', '일별매출현황'], ['scal', '예약정산달력'], ['scost', '비용·정산자료'], ['skpi', '운영지표']] },
   { key: 'cust', label: '고객관리', tabs: [['cust:all', '전체고객'], ['cust:blocked', '예약불가그룹'], ['cust:deleted', '삭제고객']] },
   { key: 'camp', label: '캠핑장관리', tabs: [['rules', '예약정보설정'], ['special', '임시요금관리'], ['closed', '휴장일관리']] },
   { key: 'ops', label: '운영관리', tabs: [['settings', '환경설정'], ['smsset', '문자발송설정'], ['sms', '문자 발송 · 기록'], ['visits', '방문자 통계']] },
@@ -1321,6 +1338,47 @@ async function loadCost() {
     `</tbody><tfoot><tr><td>합계</td>${cols.map(k => `<td class="num">${['count', 'sms', 'lms'].includes(k) ? t(k) + ' 건' : won(t(k)) + ' 원'}</td>`).join('')}</tr></tfoot>`;
 }
 $('co-year').onchange = loadCost;
+
+/* ---------- 운영지표 (연도별 추이) ---------- */
+let KPI = null;
+async function loadKpi() {
+  try { KPI = await api('/api/bk/kpi'); } catch (e) { toast('⚠️ ' + e.message); return; }
+  renderKpi();
+}
+function renderKpi() {
+  const Y = KPI.years, thisYear = +TODAY.slice(0, 4);
+  const pct = v => v == null ? '<span class="zero">-</span>' : v + '%';
+  const diff = (a, b) => b ? `<small style="color:${a >= b ? '#1f8a5b' : '#d64545'}">${a >= b ? '▲' : '▼'}${Math.abs(Math.round((a - b) / b * 100))}%</small>` : '';
+  // 올해 오늘까지 vs 작년 같은 기간
+  const [t, l] = [KPI.ytd.this, KPI.ytd.last], md = KPI.ytd.date.replace('-', '/');
+  $('kp-ytd').innerHTML = `<b>${thisYear}년 1/1 ~ ${md}</b> (작년 같은 기간 대비) · 예약 <b>${won(t[0])}</b>건 ${diff(t[0], l[0])}
+    · 숙박 <b>${won(t[1])}</b>박 ${diff(t[1], l[1])} · 매출 <b>${won(t[2])}</b>원 ${diff(t[2], l[2])}
+    <span class="hint">(작년: ${won(l[0])}건 · ${won(l[1])}박 · ${won(l[2])}원)</span>`;
+  // 지표 선택 막대그래프
+  const m = $('kp-metric').value, label = $('kp-metric').selectedOptions[0].text;
+  const unit = { revenue: '원', count: '건', nights: '박', adr: '원', occupancy: '%', repeat_rate: '%' }[m];
+  drawChart($('kp-chart'), Y.filter(y => y.year <= thisYear).map(y => ({ label: String(y.year).slice(2) + '년', value: y[m] || 0,
+    tip: `<b>${y.year}년</b>${y.year === thisYear ? ' (오늘까지)' : ''}<br>${label} ${won(y[m] || 0)}${unit}<br>예약 ${won(y.count)}건 · 매출 ${won(y.revenue)}원` })));
+  // 연도별 표
+  const rows = Y.slice().reverse();
+  $('kp-table').innerHTML = `<thead><tr><th>연도</th><th>예약건수</th><th>숙박(박)</th><th>매출</th><th>전년 대비</th><th>1박 평균</th><th>가동률</th><th>고객</th><th>재방문율</th><th>예약~입실</th><th>주말</th><th>취소</th></tr></thead><tbody>` +
+    rows.map(y => { const p = Y.find(x => x.year === y.year - 1);
+      return `<tr><td><b>${y.year}</b>${y.year === thisYear ? ' <small>(오늘까지)</small>' : y.year > thisYear ? ' <small>(예약)</small>' : ''}</td>
+      <td class="num">${won(y.count)}</td><td class="num">${won(y.nights)}</td><td class="num"><b>${won(y.revenue)}</b></td>
+      <td class="num">${p && y.year < thisYear ? diff(y.revenue, p.revenue) : ''}</td><td class="num">${won(y.adr)}</td><td class="num">${pct(y.occupancy)}</td>
+      <td class="num">${y.customers ? won(y.customers) + '명' : '<span class="zero">-</span>'}</td><td class="num">${pct(y.repeat_rate)}</td>
+      <td class="num">${y.lead == null ? '-' : y.lead + '일'}</td><td class="num">${y.weekend_rate}%</td><td class="num">${z(y.cancelled)}</td></tr>`; }).join('') + '</tbody>';
+  // 월별 매출: 행 = 연도, 열 = 1~12월 (만원), 그 달 최고 연도 굵게
+  const best = Array.from({ length: 12 }, (_, i) => Math.max(...Y.map(y => y.months[i])));
+  const man = v => v ? won(Math.round(v / 10000)) : '<span class="zero">0</span>';
+  $('kp-month').innerHTML = `<thead><tr><th>연도 (만원)</th>${Array.from({ length: 12 }, (_, i) => `<th>${i + 1}월</th>`).join('')}<th>합계</th></tr></thead><tbody>` +
+    rows.map(y => `<tr><td><b>${y.year}</b></td>${y.months.map((v, i) => `<td class="num">${v && v === best[i] ? `<b style="color:var(--blue-deep)">${man(v)}</b>` : man(v)}</td>`).join('')}<td class="num"><b>${man(y.revenue)}</b></td></tr>`).join('') + '</tbody>';
+  // 객실별 매출 (만원)
+  const used = KPI.rooms.filter(r => Y.some(y => y.rooms[r.id]));
+  $('kp-room').innerHTML = `<thead><tr><th>연도 (만원)</th>${used.map(r => `<th>${esc(r.name)}</th>`).join('')}</tr></thead><tbody>` +
+    rows.map(y => `<tr><td><b>${y.year}</b></td>${used.map(r => `<td class="num">${man(y.rooms[r.id] || 0)}</td>`).join('')}</tr>`).join('') + '</tbody>';
+}
+$('kp-metric').onchange = () => KPI && renderKpi();
 
 function drawChart(el, data) {
   const max = Math.max(...data.map(d => d.value), 1);
@@ -2004,14 +2062,15 @@ $('a-myip').onclick = async () => {
 
 /* =============== 시작 =============== */
 const LOADERS = { cal: loadCal, pay: loadPay, refund: loadRefund, cancel: loadCancel, monthly: loadMonthly, opts: loadOpts,
-  smonth: loadSalesMonthly, sday: loadSalesDaily, scal: loadSalesCal, scost: loadCost, cust: loadCust, sms: loadSms,
+  smonth: loadSalesMonthly, sday: loadSalesDaily, scal: loadSalesCal, scost: loadCost, skpi: loadKpi, cust: loadCust, sms: loadSms,
   settings: () => loadSettings('env'), smsset: () => loadSettings('sms'), rules: () => loadSettings('rules'),
   special: loadSpecial, closed: loadClosed, visits: loadVisits };
 async function loadMeta() { META = await api('/api/bk/settings'); }
 async function init() {
   try { await loadMeta(); } catch { return; }
   const y = +TODAY.slice(0, 4);
-  document.querySelectorAll('.year-sel').forEach(s => { s.innerHTML = [y + 1, y, y - 1, y - 2].map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}년도</option>`).join(''); });
+  const years = Array.from({ length: y + 2 - 2015 }, (_, i) => y + 1 - i); // 내년 ~ 2015년 (땡큐캠핑 이관 자료부터)
+  document.querySelectorAll('.year-sel').forEach(s => { s.innerHTML = years.map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}년도</option>`).join(''); });
   $('sd-month').innerHTML = Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}" ${i + 1 === +TODAY.slice(5, 7) ? 'selected' : ''}>${i + 1}월</option>`).join('');
   document.querySelectorAll('.room-filter').forEach(s => { s.innerHTML = '<option value="">전체 객실</option>' + META.rooms.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join(''); });
   document.querySelectorAll('.pay-filter').forEach(s => { s.innerHTML = '<option value="">결제구분</option>' + META.payMethods.map(p => `<option>${p}</option>`).join(''); });

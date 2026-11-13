@@ -2223,6 +2223,76 @@ def cost_report(year):
 # ──────────────────────────────────────────────
 #  요금표의 성수기 기간 · 공휴일 수정
 # ──────────────────────────────────────────────
+def kpi():
+    """운영지표 — 연도별 추이 (입실일 기준, 예약막음 제외). 땡큐캠핑 이관 예약 포함
+    연도별: 건수 · 박수 · 매출 · 1박 평균 · 가동률(지금 객실 기준) · 고객수 · 재방문율 · 예약~입실 평균 일수 · 주말 비중 · 취소
+    올해는 오늘까지, 작년 같은 기간과 비교(YTD)"""
+    prices, settings = load_prices(), load_settings()
+    rooms = [{'id': r['id'], 'name': r['name']} for r in prices['rooms']]
+    room_ids = {r['id'] for r in rooms}
+    with _lock:
+        rows = db().execute("SELECT room_id, checkin, checkout, phone, status, total, paid, refund, source, created_at "
+                            "FROM reservations WHERE status IN ('confirmed', 'cancelled') ORDER BY checkin").fetchall()
+    today = date.today()
+    years, first_seen = {}, {}
+    rev_room, rev_month = {}, {}
+    ytd = {'this': [0, 0, 0], 'last': [0, 0, 0]}  # 건수 · 박수 · 매출
+    for r in rows:
+        ci, co = date.fromisoformat(r['checkin']), date.fromisoformat(r['checkout'])
+        y = years.setdefault(ci.year, {'year': ci.year, 'count': 0, 'nights': 0, 'revenue': 0, 'cur_nights': 0,
+                                       'cancelled': 0, 'phones': set(), 'repeat': set(), 'lead': [], 'weekend': 0,
+                                       'sources': {}})
+        rev = revenue_of(r)
+        y['revenue'] += rev
+        rev_month.setdefault(ci.year, [0] * 12)[ci.month - 1] += rev
+        if r['status'] == 'cancelled':
+            y['cancelled'] += 1
+            continue
+        nights = (co - ci).days
+        y['count'] += 1
+        y['nights'] += nights
+        if r['room_id'] in room_ids:
+            y['cur_nights'] += nights
+        rev_room.setdefault(ci.year, {}).setdefault(r['room_id'], 0)
+        rev_room[ci.year][r['room_id']] += rev
+        y['weekend'] += int(ci.weekday() in (4, 5))  # 금 · 토 입실
+        y['sources'][r['source']] = y['sources'].get(r['source'], 0) + 1
+        lead = (ci - date.fromisoformat(r['created_at'][:10])).days
+        if 0 <= lead <= 400:
+            y['lead'].append(lead)
+        if r['phone']:
+            y['phones'].add(r['phone'])
+            if r['phone'] in first_seen and first_seen[r['phone']] < ci.year:
+                y['repeat'].add(r['phone'])
+            first_seen.setdefault(r['phone'], ci.year)
+        for key, yy in (('this', today.year), ('last', today.year - 1)):
+            if ci.year == yy and (ci.month, ci.day) <= (today.month, today.day):
+                ytd[key][0] += 1
+                ytd[key][1] += nights
+                ytd[key][2] += rev
+    units = sum(units_of(settings, r['id']) for r in rooms)
+    out = []
+    for yv in sorted(years):
+        y = years[yv]
+        days = ((today - date(yv, 1, 1)).days + 1) if yv == today.year else (date(yv + 1, 1, 1) - date(yv, 1, 1)).days
+        n_ph = len(y['phones'])
+        out.append({
+            'year': yv, 'count': y['count'], 'nights': y['nights'], 'revenue': y['revenue'], 'cancelled': y['cancelled'],
+            'adr': round(y['revenue'] / y['nights']) if y['nights'] else 0,  # 1박 평균 매출
+            'occupancy': round(y['cur_nights'] / (days * units) * 100, 1) if yv <= today.year and units else None,
+            'customers': n_ph or None, 'repeat': len(y['repeat']),
+            'repeat_rate': round(len(y['repeat']) / n_ph * 100, 1) if n_ph else None,
+            'lead': round(sum(y['lead']) / len(y['lead']), 1) if y['lead'] else None,
+            'weekend_rate': round(y['weekend'] / y['count'] * 100, 1) if y['count'] else 0,
+            'sources': y['sources'], 'months': rev_month.get(yv, [0] * 12),
+            'rooms': rev_room.get(yv, {}),
+        })
+    others = sorted({k for y in out for k in y['rooms'] if k not in room_ids})  # 지금은 없는 옛 구역 (캠핑존 등)
+    return {'years': out, 'rooms': rooms + [{'id': k, 'name': k} for k in others],
+            'ytd': {'date': today.strftime('%m-%d'), 'this': ytd['this'], 'last': ytd['last']},
+            'units': units}
+
+
 def save_calendar_rules(peak_periods, holidays):
     periods = []
     for p in peak_periods:
@@ -2413,6 +2483,8 @@ def handle_admin(method, path, query, body):
             return 200, visit_stats(q('days', '30'))
         if path == '/api/bk/stats':
             return 200, stats(int(q('year') or date.today().year))
+        if path == '/api/bk/kpi':
+            return 200, kpi()
         if path == '/api/bk/settings':
             prices = load_prices()
             return 200, {'settings': load_settings(), 'peakPeriods': prices.get('peakPeriods', []),
