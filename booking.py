@@ -37,6 +37,7 @@ WEEKDAY = '월화수목금토일'
 # 예약완료 · 입실 전날 안내는 장문(LMS)으로 자세히 — 홈페이지 이용 안내와 같은 내용만 (예약번호는 문자에 넣지 않음)
 CONFIRMED_LMS = """[동해카라반펜션] 예약확정 안내
 {이름}님, 입금이 확인되어 예약이 확정되었습니다.
+{환영인사}
 
 ■ 객실
 {객실상세}
@@ -298,6 +299,7 @@ OLD_TEMPLATES = {  # 줄바꿈 · 띄어쓰기 차이는 무시하고 비교
         '입·퇴실 시간 준수 부탁드립니다.\n\n※ 모든 객실 안에서는 금연입니다.\n다음 고객을 위하여 사용하신 식기류는 설거지해 주시고,\n'
         '쓰레기는 분리수거장에 분리수거해 주시길 당부드립니다.\n\n도로명주소: 울산광역시 울주군 온산읍 강양길 162\n'
         '지번주소: 울산광역시 울주군 온산읍 강양리 61-2\n\n문의전화 {펜션전화}',
+        CONFIRMED_LMS.replace('{환영인사}\n', ''),  # 2026-11-14 장문 기본 문구 ({환영인사} 넣기 전)
     ],
     'reminder': ['[동해카라반]내일 입실일입니다. 15시부터 입실가능. 울주군 온산읍 강양길162'],
 }
@@ -1040,7 +1042,27 @@ def list_reservations(start=None, end=None, status=None, q=None, basis='stay', r
     order = {'created': 'created_at DESC', 'cancelled': 'cancelled_at DESC'}.get(basis, 'checkin, room_id')
     sql += f' ORDER BY {order} LIMIT 3000'
     with _lock:
-        return [row_dict(r) for r in db().execute(sql, args).fetchall()]
+        rows = [row_dict(r) for r in db().execute(sql, args).fetchall()]
+        add_visit_counts(rows)
+    return rows
+
+
+def add_visit_counts(rows):
+    """예약마다 r['visits'] = 그 입실일 전에 같은 휴대폰으로 묵은 확정 방문(예약번호) 수 → 관리자 화면 ⭐ 표시
+    사장님 · 펜션 번호는 0"""
+    settings = load_settings()
+    own = {norm_phone(settings.get('phone')), norm_phone(settings.get('adminPhone'))} - {''}
+    phones = sorted({r['phone'] for r in rows if r['phone'] and r['phone'] not in own})
+    hist = {}
+    for i in range(0, len(phones), 500):  # SQLite 변수 개수 제한
+        part = phones[i:i + 500]
+        for p in db().execute(
+                f"SELECT phone, COALESCE(NULLIF(group_code, ''), code) g, MIN(checkin) ci FROM reservations "
+                f"WHERE status='confirmed' AND phone IN ({','.join('?' * len(part))}) GROUP BY phone, g", part):
+            hist.setdefault(p['phone'], []).append((p['ci'], p['g']))
+    for r in rows:
+        g = r['group_code'] or r['code']
+        r['visits'] = sum(1 for ci, pg in hist.get(r['phone'], ()) if ci < r['checkin'] and pg != g)
 
 
 def lookup(code, phone):
@@ -1418,6 +1440,14 @@ def render_template(tpl, rows, settings=None, drop_empty=False):
         '계좌': settings.get('bankShort') or settings['bank'], '입금기한': fmt_deadline(r.get('deadline')),
         '펜션전화': settings['phone'],
     }
+    if '{환영인사}' in tpl:  # 첫 손님 환영 · 단골 감사 인사 — 값이 없으면(사장님 번호 등) 그 줄을 통째로 뺌
+        try:
+            vals['환영인사'] = welcome_greeting(rows, settings)
+        except Exception as e:  # 기록 조회가 실패해도 문자는 보냄
+            print('[환영인사 오류]', e)
+            vals['환영인사'] = ''
+        if not vals['환영인사']:
+            tpl = '\n'.join(line for line in tpl.split('\n') if '{환영인사}' not in line)
     sub = lambda text: re.sub(r'\{([^{}]+)\}', lambda m: str(vals.get(m.group(1), m.group(0))), text)
     if not drop_empty:
         return sub(tpl)
@@ -1542,11 +1572,14 @@ def mask_name(name):
     return name[0] + '*' * max(1, len(name) - 2) + (name[-1] if len(name) > 2 else '')
 
 
-def past_visits_text(rows, limit=5):
-    """단골 손님이면 지난 예약(같은 휴대폰, 이번 입실일 전, 취소 제외)을 최근 순으로 — 새 예약 텔레그램 알림 아래에 붙임"""
+def past_visits(rows, settings=None):
+    """같은 휴대폰으로 이번 입실일 전에 묵은 확정 예약을 방문(예약번호) 단위로, 최근 순
+    사장님 · 펜션 번호로 대신 등록한 예약은 다른 손님 것이 섞여 있어 빈 목록"""
     r = rows[0]
-    if not r.get('phone'):
-        return ''
+    settings = settings or load_settings()
+    own = {norm_phone(settings.get('phone')), norm_phone(settings.get('adminPhone'))} - {''}
+    if not r.get('phone') or r['phone'] in own:
+        return []
     names = {x['id']: x['name'] for x in load_prices()['rooms']}
     with _lock:
         past = db().execute(
@@ -1555,11 +1588,48 @@ def past_visits_text(rows, limit=5):
             (r['phone'], r['checkin'], r['group_code'] or r['code'])).fetchall()
     visits = {}
     for p in past:  # 예약번호(그룹) 하나 = 방문 1회
-        v = visits.setdefault(p['group_code'] or p['code'], {'checkin': p['checkin'], 'checkout': p['checkout'], 'rooms': []})
+        v = visits.setdefault(p['group_code'] or p['code'], {'checkin': p['checkin'], 'checkout': p['checkout'],
+                                                            'room_ids': [], 'rooms': []})
+        v['room_ids'].append(p['room_id'])
         v['rooms'].append(names.get(p['room_id'], p['room_id']))
-    if not visits:
+    return sorted(visits.values(), key=lambda v: v['checkin'], reverse=True)
+
+
+FIRST_GREETING = '동해카라반펜션을 찾아주셔서 감사합니다. 바다와 함께 즐겁고 편안한 시간 보내세요.'
+
+
+def welcome_greeting(rows, settings=None):
+    """손님 문자 {환영인사}: 단골이면 방문 횟수별 감사 인사, 기록이 없으면 환영 인사
+    (2021년 이전 방문은 기록이 지워졌을 수 있어 '처음'이라는 말은 쓰지 않음)
+    사장님 · 펜션 번호로 대신 등록한 예약은 빈 문자열 → 그 줄은 빠짐"""
+    settings = settings or load_settings()
+    own = {norm_phone(settings.get('phone')), norm_phone(settings.get('adminPhone'))} - {''}
+    if not rows[0].get('phone') or rows[0]['phone'] in own:
         return ''
-    items = sorted(visits.values(), key=lambda v: v['checkin'], reverse=True)
+    visits = past_visits(rows, settings)
+    if not visits:
+        return FIRST_GREETING
+    last, n = visits[0], len(visits) + 1  # n = 이번이 몇 번째 방문인지
+    y, m = int(last['checkin'][:4]), int(last['checkin'][5:7])
+    when = f'{y}년 {m}월 {", ".join(dict.fromkeys(last["rooms"]))}'
+    if n == 2:
+        text = f'지난 {when} 이용 후 다시 찾아주셔서 감사합니다.'
+    elif n <= 4:
+        text = f'벌써 {n}번째 방문이시네요. 잊지 않고 찾아주셔서 감사합니다. (지난 방문: {when})'
+    else:
+        text = f'{n}번째 방문, 늘 찾아주셔서 진심으로 감사드립니다. 이번에도 편히 쉬다 가세요. (지난 방문: {when})'
+    names = {x['id']: x['name'] for x in load_prices()['rooms']}
+    same = [x['room_id'] for x in rows if x['room_id'] in last['room_ids']]
+    if same:
+        text += f'\n지난번과 같은 객실({", ".join(names.get(i, i) for i in dict.fromkeys(same))})을 다시 선택해 주셨네요.'
+    return text
+
+
+def past_visits_text(rows, limit=5):
+    """단골 손님이면 지난 예약(같은 휴대폰, 이번 입실일 전, 취소 제외)을 최근 순으로 — 새 예약 텔레그램 알림 아래에 붙임"""
+    items = past_visits(rows)
+    if not items:
+        return ''
     lines = [f'⭐ 단골 손님 — 지난 예약 {len(items)}회']
     for v in items[:limit]:  # 언제 · 어느 객실만 (금액은 넣지 않음)
         nights = (date.fromisoformat(v['checkout']) - date.fromisoformat(v['checkin'])).days
@@ -2552,6 +2622,7 @@ def handle_admin(method, path, query, body):
             with _lock:
                 r = get_reservation(int(q('id', '0')))
                 group = group_rows(r['group_code']) if r['group_code'] else [r]
+                add_visit_counts([r])
             return 200, {'item': r, 'group': group}
         if path == '/api/bk/voucher':
             with _lock:
