@@ -2334,8 +2334,8 @@ def kpi():
         nights = (co - ci).days
         y['count'] += 1
         y['nights'] += nights
-        if r['room_id'] in room_ids:
-            y['cur_nights'] += nights
+        if r['room_id'] in room_ids:  # 가동률: 올해는 오늘까지 지난 밤만 (앞으로의 예약 제외)
+            y['cur_nights'] += nights if ci.year < today.year else max(0, (min(co, today + timedelta(days=1)) - ci).days)
         rev_room.setdefault(ci.year, {}).setdefault(r['room_id'], 0)
         rev_room[ci.year][r['room_id']] += rev
         y['weekend'] += int(ci.weekday() in (4, 5))  # 금 · 토 입실
