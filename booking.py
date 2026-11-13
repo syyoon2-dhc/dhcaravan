@@ -1550,22 +1550,20 @@ def past_visits_text(rows, limit=5):
     names = {x['id']: x['name'] for x in load_prices()['rooms']}
     with _lock:
         past = db().execute(
-            "SELECT group_code, code, room_id, checkin, checkout, total, source FROM reservations "
+            "SELECT group_code, code, room_id, checkin, checkout FROM reservations "
             "WHERE phone=? AND status='confirmed' AND checkin < ? AND group_code != ? ORDER BY checkin DESC, id",
             (r['phone'], r['checkin'], r['group_code'] or r['code'])).fetchall()
     visits = {}
     for p in past:  # 예약번호(그룹) 하나 = 방문 1회
-        v = visits.setdefault(p['group_code'] or p['code'], {'checkin': p['checkin'], 'checkout': p['checkout'],
-                                                            'rooms': [], 'total': 0, 'source': p['source']})
+        v = visits.setdefault(p['group_code'] or p['code'], {'checkin': p['checkin'], 'checkout': p['checkout'], 'rooms': []})
         v['rooms'].append(names.get(p['room_id'], p['room_id']))
-        v['total'] += p['total']
     if not visits:
         return ''
     items = sorted(visits.values(), key=lambda v: v['checkin'], reverse=True)
-    lines = [f'⭐ 단골 손님 — 지난 예약 {len(items)}회 (합계 {sum(v["total"] for v in items):,}원)']
-    for v in items[:limit]:
+    lines = [f'⭐ 단골 손님 — 지난 예약 {len(items)}회']
+    for v in items[:limit]:  # 언제 · 어느 객실만 (금액은 넣지 않음)
         nights = (date.fromisoformat(v['checkout']) - date.fromisoformat(v['checkin'])).days
-        lines.append(f'· {v["checkin"][2:].replace("-", ".")} {", ".join(v["rooms"])} {nights}박 {v["total"]:,}원')
+        lines.append(f'· {v["checkin"][2:].replace("-", ".")} {", ".join(v["rooms"])} {nights}박')
     if len(items) > limit:
         lines.append(f'· … 외 {len(items) - limit}회 (첫 방문 {items[-1]["checkin"][:4]}년)')
     return '\n'.join(lines)
