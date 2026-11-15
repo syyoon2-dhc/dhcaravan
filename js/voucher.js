@@ -64,7 +64,7 @@
     const b = v.business, cx = v.status === 'cancelled';
     const items = v.items.map(it => `<tr class="${it.status === 'cancelled' && !cx ? 'x' : ''}">
       <td><b>${esc(it.room_name)}</b>${it.options.map(o => `<br><small>· ${esc(o.name)}${o.detail ? ' ' + esc(o.detail) : ''} × ${o.qty}</small>`).join('')}</td>
-      <td class="n">${it.guests}명</td><td class="n">${won(it.total)}원${it.status === 'cancelled' && !cx ? '<br><small>(취소)</small>' : ''}</td></tr>`).join('');
+      <td class="n">${won(it.total)}원${it.status === 'cancelled' && !cx ? '<br><small>(취소)</small>' : ''}</td></tr>`).join('');
     let pay = `<tr><th>결제 금액</th><td><b>${won(v.total)}원</b></td></tr>`;
     if (cx) {
       pay += `<tr><th>취소</th><td class="red">취소된 예약입니다${v.refund ? ` (환불 ${won(v.refund)}원)` : ''}</td></tr>`;
@@ -85,7 +85,7 @@
         ${v.request ? `<tr><th>요청사항</th><td style="white-space:pre-wrap">${esc(v.request)}</td></tr>` : ''}
       </table>
       <h4>객실 · 금액</h4>
-      <table class="dv-items"><tr><th>객실 · 옵션</th><th>인원</th><th>금액</th></tr>${items}</table>
+      <table class="dv-items"><tr><th>객실 · 옵션</th><th>금액</th></tr>${items}</table>
       <table style="margin-top:6px">${pay}</table>
       <div class="dv-sign">
         <p>${v.status === 'pending' ? '위와 같이 예약이 접수되었음을 확인합니다. (입금 확인 후 확정)' : cx ? '위 예약은 취소되었음을 확인합니다.' : '위와 같이 예약되었음을 확인합니다.'}</p>
