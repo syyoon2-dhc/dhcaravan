@@ -39,21 +39,24 @@
   #dv-doc .dv-void { position:absolute; top:40%; left:50%; transform:translate(-50%,-50%) rotate(-20deg); font-size:90px; font-weight:900;
                      color:rgba(214,69,69,.16); border:8px solid rgba(214,69,69,.16); padding:0 30px; pointer-events:none; white-space:nowrap; }
   @media (max-width:520px) { #dv-wrap .dv-bar button { padding:9px 11px; font-size:13.5px; } #dv-doc { padding:24px 16px; } #dv-doc h2 { font-size:22px; } #dv-doc th, #dv-doc td { padding:6px 6px; font-size:13px; } }
+  /* 인쇄 직전(beforeprint) body.dv-fit: A4 내용 폭(182mm)에 맞춘 촘촘한 배치 → 넘치면 zoom 으로 한 장에 맞춤 */
+  body.dv-fit #dv-doc { width:182mm; max-width:none; padding:0; border-radius:0; line-height:1.45; }
+  body.dv-fit #dv-doc .dv-head { padding-bottom:10px; margin-bottom:10px; }
+  body.dv-fit #dv-doc h2 { font-size:24px; }
+  body.dv-fit #dv-doc h4 { margin:12px 0 5px; font-size:13.5px; }
+  body.dv-fit #dv-doc th, body.dv-fit #dv-doc td { padding:4px 8px; font-size:13px; }
+  body.dv-fit #dv-doc pre { font-size:11.5px; padding:6px 10px; margin:0; }
+  body.dv-fit #dv-doc .dv-sign { margin-top:10px; }
+  body.dv-fit #dv-doc .dv-co { margin-top:8px; }
+  body.dv-fit #dv-doc .dv-biz { margin-top:10px; padding-top:6px; }
   @media print {
     @page { size:A4; margin:14mm; }
+    html, body { height:auto !important; min-height:0 !important; }
     body.dv-open > *:not(#dv-wrap) { display:none !important; }
-    body.dv-open { background:#fff !important; padding:0 !important; }
+    body.dv-open { background:#fff !important; padding:0 !important; margin:0 !important; }
     #dv-wrap { position:static; background:none; padding:0; overflow:visible; }
     #dv-wrap .dv-bar { display:none; }
-    #dv-doc { max-width:none; padding:0; border-radius:0; line-height:1.45; }
-    #dv-doc .dv-head { padding-bottom:10px; margin-bottom:10px; }
-    #dv-doc h4 { margin:12px 0 5px; font-size:13.5px; }
-    #dv-doc th, #dv-doc td { padding:4px 8px; font-size:13px; }
-    #dv-doc pre { font-size:11.5px; padding:6px 10px; }
-    #dv-doc .dv-sign { margin-top:10px; }
-    #dv-doc .dv-co { margin-top:8px; }
-    #dv-doc .dv-biz { margin-top:10px; padding-top:6px; }
-    #dv-doc h2 { font-size:24px; }
+    #dv-doc { page-break-inside:avoid; break-inside:avoid; }
     #dv-doc * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   }`;
 
@@ -84,8 +87,6 @@
       <h4>객실 · 금액</h4>
       <table class="dv-items"><tr><th>객실 · 옵션</th><th>인원</th><th>금액</th></tr>${items}</table>
       <table style="margin-top:6px">${pay}</table>
-      ${v.notice ? `<h4>이용 안내</h4><pre>${esc(v.notice)}</pre>` : ''}
-      ${!cx && v.refundPolicy ? `<h4>취소 · 환불 규정</h4><pre>${esc(v.refundPolicy)}</pre>` : ''}
       <div class="dv-sign">
         <p>${v.status === 'pending' ? '위와 같이 예약이 접수되었음을 확인합니다. (입금 확인 후 확정)' : cx ? '위 예약은 취소되었음을 확인합니다.' : '위와 같이 예약되었음을 확인합니다.'}</p>
         <p style="color:#5f7382">발급일시 ${esc(v.issuedAt)}</p>
@@ -167,6 +168,22 @@
     document.body.appendChild(wrap);
     document.body.classList.add('dv-open');
   }
+
+  // A4 한 장: 인쇄 창이 뜨기 전에 높이를 재서 넘치면 줄임 (Ctrl+P 로 인쇄해도 동작)
+  const PAGE_H = (297 - 28) * 96 / 25.4 * 0.95;   // @page 여백 14mm×2 뺀 높이(px), 화면·인쇄 글꼴 차이 여유 5%
+  function fitPage() {
+    const doc = document.getElementById('dv-doc'); if (!doc) return;
+    document.body.classList.add('dv-fit');
+    doc.style.zoom = '';
+    const h = doc.scrollHeight;
+    if (h > PAGE_H) doc.style.zoom = (Math.floor(PAGE_H / h * 1000) / 1000).toString();
+  }
+  function unfit() {
+    document.body.classList.remove('dv-fit');
+    const doc = document.getElementById('dv-doc'); if (doc) doc.style.zoom = '';
+  }
+  window.addEventListener('beforeprint', fitPage);
+  window.addEventListener('afterprint', unfit);
 
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.getElementById('dv-wrap')) { e.stopImmediatePropagation(); close(); } }, true);
   window.DhcVoucher = { open, close };
