@@ -231,10 +231,23 @@
     return null;
   }
 
+  function faqAnswer(faq, t) {
+    const acts = /주소|위치|길찾기|어디|오시는/.test(t) && SITE.contact
+      ? [{ label: '네이버 지도', href: SITE.contact.naverMap, blank: true }, { label: '카카오맵', href: SITE.contact.kakaoMap, blank: true }] : [];
+    // site.json faq[].links (예: 횟집 홈페이지 · 횟집 전화)
+    (faq.links || (faq.link ? [faq.link] : [])).forEach((l, i) => acts.push({ label: l.label, href: l.href, blank: !/^tel:/.test(l.href), cls: i ? '' : 'gold' }));
+    return { html: esc(faq.a), acts };
+  }
+
   function answer(raw) {
     const t = raw.trim();
     if (!t) return null;
     const has = re => re.test(t);
+    // 횟집 질문은 펜션 예약 · 전화보다 먼저 (예: "횟집 예약" → 횟집 전화 안내)
+    if (has(/횟집|물회|매운탕|생선회|회\s?(먹|메뉴|포장|한\s?접시)/)) {
+      const hf = (SITE.faq || []).find(f => f.q === '동해횟집');
+      if (hf) return faqAnswer(hf, t);
+    }
     if (has(/전화|통화|연락처|번호/)) return ansPhone();
     if (has(/반려|강아지|애견|고양이|펫/)) return ansUnknown();
     const n = parsePeople(t);
@@ -256,12 +269,7 @@
     if (has(/관광|근처|주변|가볼|가 볼|놀거리|볼거리|여행지|코스|명소|구경/)) return ansSpots();
     if (has(/추천|어떤\s?방|어느\s?방|몇\s?명|인원/)) return ansAskPeople();
     const faq = (SITE.faq || []).find(f => f.keys.some(k => t.includes(k)));
-    if (faq) {
-      const acts = /주소|위치|길찾기|어디|오시는/.test(t) && SITE.contact
-        ? [{ label: '네이버 지도', href: SITE.contact.naverMap, blank: true }, { label: '카카오맵', href: SITE.contact.kakaoMap, blank: true }] : [];
-      if (faq.link) acts.push({ label: faq.link.label, href: faq.link.href, blank: true, cls: 'gold' });   // site.json faq[].link (예: 횟집 홈페이지)
-      return { html: esc(faq.a), acts };
-    }
+    if (faq) return faqAnswer(faq, t);
     if (has(/시설|편의|비품|부대/)) return ansFacilities();
     if (has(/객실|방\b|카라반|펜션|종류/)) return ansRooms();
     if (has(/^(안녕|하이|hi|hello)/i)) return { html: '안녕하세요! 무엇이 궁금하신가요? 아래 버튼을 누르거나 편하게 물어봐 주세요.', acts: [] };
