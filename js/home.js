@@ -297,13 +297,16 @@ function swipe(el, cb) {
 }
 
 /* ---------- 06 인원별 추천 ---------- */
-// 머물 수 있는 객실(최대 인원 이상) 중 기준 인원 안에 드는 객실 먼저, 그다음 (요금 + 추가 인원 비용)이 적은 순
-function recommend(n) {
-  return ROOMS.filter(r => r.group !== 'deck' && r.max >= n).map(r => {
-    const extraN = Math.max(0, n - r.std);
-    const extraCost = extraN * extraPerPerson(r);
-    return { r, extraN, extraCost, fits: extraN === 0 || extraFree(r) ? 0 : 1, total: r.price.normal[0] + extraCost };
-  }).sort((a, b) => a.fits - b.fits || a.total - b.total || a.r.std - b.r.std);
+// 추천 기준은 js/reco.js (AI 숙박 도우미와 같이 씀)
+const recommend = n => DhcReco.recommend(ROOMS, SITE.rooms, n);
+// "오션 전면뷰 카라반 아도라542UL · 하비495WFB 또는 펜션 구름 · 바다"
+function recoNames(best) {
+  const c = best.filter(x => x.r.group === 'caravan'), p = best.filter(x => x.r.group !== 'caravan');
+  const names = xs => xs.map(x => `<b>${esc(x.r.name)}</b>`).join(' · ');
+  const parts = [];
+  if (c.length) parts.push(`${c.every(x => x.front) ? '오션 전면뷰 ' : ''}카라반 ${names(c)}`);
+  if (p.length) parts.push(`펜션 ${names(p)}`);
+  return parts.join(' 또는 ');
 }
 function recoText(x) {
   const r = x.r;
@@ -332,17 +335,16 @@ function showReco(n, MAXN) {
       <div class="reco-list">${big.map(r => recoItem({ r, extraN: 0 }, false)).join('')}</div>`;
     return;
   }
-  const list = recommend(n);
+  const { list, best } = recommend(n);
   if (!list.length) { out.innerHTML = '<p class="reco-msg">맞는 객실이 없습니다. 전화로 문의해 주세요.</p>'; return; }
-  const best = list.filter(x => !x.fits);
-  out.innerHTML = `<p class="reco-msg"><b>${n}명</b>이면 ${best.length ? `<b>${best.slice(0, 2).map(x => esc(x.r.name)).join(' · ')}</b> 객실을 추천합니다.` : '아래 객실에 머물 수 있습니다.'} 머물 수 있는 객실 ${list.length}곳</p>
-    <div class="reco-list">${list.map((x, i) => recoItem(x, i < 2 && !x.fits)).join('')}</div>`;
+  out.innerHTML = `<p class="reco-msg"><b>${n}명</b>이면 ${recoNames(best)} 객실을 추천합니다. 머물 수 있는 객실 ${list.length}곳</p>
+    <div class="reco-list">${list.map(x => recoItem(x, x.best)).join('')}</div>`;
 }
 function recoItem(x, best) {
   const r = x.r;
   return `<button class="reco-item" data-open="${esc(r.id)}">
     <img src="${esc((roomPhotos[r.id] || [])[0] || r.cover)}" alt="" loading="lazy">
-    <span>${best ? '<span class="best">추천</span>' : ''}<b>${esc(r.name)}</b><small>${esc(detailOf(r).type || GROUP_LABEL[r.group])} · ${recoText(x)}</small>
+    <span>${best ? '<span class="best">추천</span>' : ''}<b>${esc(r.name)}</b><small>${esc(detailOf(r).type || GROUP_LABEL[r.group])} · ${esc(x.view || detailOf(r).view || r.badge)}</small><small>${recoText(x)}</small>
     <small>${won(r.price.normal[0])}원~ / 1박</small></span>
   </button>`;
 }

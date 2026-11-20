@@ -52,10 +52,17 @@
       ROOMS = PRICE.rooms || [];
     }
     PHONE = (SITE.contact && SITE.contact.phone) || PHONE;
+    // 인원별 추천 기준(js/reco.js)이 없는 화면이면 불러옴
+    if (!window.DhcReco) {
+      await new Promise((ok, fail) => {
+        const s = document.createElement('script');
+        s.src = 'js/reco.js'; s.onload = ok; s.onerror = fail;
+        document.head.appendChild(s);
+      });
+    }
   }
   const detail = r => (SITE.rooms && SITE.rooms[r.id]) || {};
   const extraFree = r => /없음/.test(r.extra || '');
-  const extraPP = r => extraFree(r) ? 0 : +((r.extra || '').match(/([\d,]+)\s*원/) || [, '0'])[1].replace(/,/g, '');
   const reserveUrl = () => (SITE.contact && SITE.contact.reserveUrl) || 'reserve.html';
   const onHome = () => !!document.getElementById('reserve') && !!window.DHC;
 
@@ -68,13 +75,8 @@
     ? { label: `📷 ${r.name} 사진 보기`, act: () => window.DHC.openRoom(r.id), close: true }
     : null;
 
-  function recommend(n) {
-    return ROOMS.filter(r => r.group !== 'deck' && r.max >= n).map(r => {
-      const extraN = Math.max(0, n - r.std);
-      const extraCost = extraN * extraPP(r);
-      return { r, extraN, extraCost, fits: extraN === 0 || extraFree(r) ? 0 : 1, total: r.price.normal[0] + extraCost };
-    }).sort((a, b) => a.fits - b.fits || a.total - b.total || a.r.std - b.r.std);
-  }
+  // 추천 기준은 js/reco.js (홈페이지 [객실 찾기]와 같이 씀)
+  const recommend = n => DhcReco.recommend(ROOMS, SITE.rooms, n);
 
   function ansPeople(n) {
     const maxAll = Math.max(...ROOMS.filter(r => r.group !== 'deck').map(r => r.max));
@@ -85,22 +87,24 @@
         acts: [bookBtn(), callBtn()],
       };
     }
-    const list = recommend(n);
-    const top = list.filter(x => !x.fits).slice(0, 3);
-    const show = top.length ? top : list.slice(0, 3);
-    const first = show[0].r;
-    const lines = show.map(x => {
+    const { list, best } = recommend(n);
+    if (!best.length) return ansUnknown();
+    const line = x => {
       const r = x.r;
       const ex = !x.extraN ? '' : extraFree(r) ? ' · 추가 인원 비용 없음' : ` · 추가 ${x.extraN}명 +${won(x.extraCost)}원/박`;
-      return `<li><b>${esc(r.name)}</b> (${esc(GROUP[r.group])}) 기준 ${r.std}명 · 최대 ${r.max}명${ex} · ${won(r.price.normal[0])}원~</li>`;
-    }).join('');
-    const why = first.group === 'pension' && first.std >= 8 ? '가족 · 단체 숙박에 적합합니다.'
-      : first.group === 'pension' ? '추가 인원 비용 없이 넉넉하게 머물 수 있어요.'
-      : '바다를 마주한 유럽형 카라반에서 감성 캠핑을 즐길 수 있어요.';
-    const more = list.length > show.length ? `\n이 밖에도 ${list.length - show.length}개 객실에 머물 수 있어요.` : '';
+      return `<li><b>${esc(r.name)}</b> ${esc(x.view)} · 기준 ${r.std}명 · 최대 ${r.max}명${ex} · ${won(r.price.normal[0])}원~</li>`;
+    };
+    const cs = best.filter(x => x.r.group === 'caravan'), ps = best.filter(x => x.r.group !== 'caravan');
+    let html = `<b>${n}명</b>이면 이렇게 추천해요.`;
+    if (cs.length) html += `\n🚐 <b>${cs.every(x => x.front) ? '바다를 정면으로 마주한 오션 전면뷰 카라반' : '유럽형 카라반'}</b><ul>${cs.map(line).join('')}</ul>`;
+    // 목록(ul) 뒤에는 이미 줄이 바뀌므로 \n 을 또 넣지 않음
+    if (ps.length) html += `${cs.length ? '' : '\n'}🏠 <b>${ps[0].r.std >= 8 ? '가족 · 단체 숙박에 적합한 넓은 펜션' : '추가 인원 비용 없이 넉넉한 펜션'}</b><ul>${ps.map(line).join('')}</ul>`;
+    const more = list.length - best.length;
+    if (more > 0) html += `이 밖에도 ${list.filter(x => !x.best).map(x => esc(x.r.name)).join(' · ')} 객실에 머물 수 있어요.\n`;
+    html += `요금은 비수기 평일 기준이며, 빈 객실은 날짜를 고르면 실시간 예약에서 확인됩니다.`;
     return {
-      html: `<b>${n}명</b>이면 <b>${esc(first.name)}</b> 객실을 추천합니다. ${why}<ul>${lines}</ul>${more}\n요금은 비수기 평일 기준이며, 빈 객실은 날짜를 고르면 실시간 예약에서 확인됩니다.`,
-      acts: [roomBtn(first), bookBtn(first.id), callBtn()].filter(Boolean),
+      html,
+      acts: [cs[0] && roomBtn(cs[0].r), ps[0] && roomBtn(ps[0].r), bookBtn(best.length === 1 ? best[0].r.id : null), callBtn()].filter(Boolean),
     };
   }
 
