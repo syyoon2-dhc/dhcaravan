@@ -11,7 +11,7 @@
  *   2) js/booking-config.js 에 window.DHC_CHAT_AI = true 를 넣으면 질문을 서버로 보내고,
  *      서버가 응답하지 않으면 아래 정해진 답변으로 대신 답합니다.
  *      요청 { message, history:[{role,text}] } → 응답 { reply: '텍스트' }
- * new.html 이 아닌 다른 화면(reserve.html 등)에 붙여도 혼자 데이터를 읽어 동작합니다.
+ * 홈페이지(index.html)가 아닌 다른 화면(reserve.html 등)에 붙여도 혼자 데이터를 읽어 동작합니다.
  */
 (() => {
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -165,6 +165,17 @@
     };
   }
 
+  // 테마 추천 (site.json themes — 예: 아이들 → 진하해수욕장 · 옹기마을 · 고래마을 + 수영장 · 오락기)
+  function ansTheme(th) {
+    const list = (th.spots || []).map(x => ({ ...x, s: (SITE.spots || []).find(s => s.name === x.name) })).filter(x => x.s);
+    const spotLines = list.map(x => `<li><b>${esc(x.s.name)}</b> (${esc(x.s.dist)}) — ${esc(x.why)}</li>`).join('');
+    const stay = (th.stay || []).map(x => `<li>${esc(x)}</li>`).join('');
+    return {
+      html: `${esc(th.title)}.\n📍 <b>주변 추천</b><ul>${spotLines}</ul>${stay ? `🏕 <b>펜션 안에서</b><ul>${stay}</ul>` : ''}관광지 이름을 물어보시면 자세히 알려 드릴게요.`,
+      acts: list.slice(0, 3).map(x => ({ label: `🗺️ ${x.s.name}`, href: `https://map.naver.com/p/search/${encodeURIComponent(x.s.query || x.s.name)}`, blank: true })),
+    };
+  }
+
   const ansPhone = () => ({ html: `전화 예약 · 문의는 아래 번호로 연락해 주세요.\n<b style="font-size:18px">${PHONE}</b>`, acts: [callBtn()] });
   const ansUnknown = () => ({
     html: `죄송해요, 그 내용은 제가 정확히 안내해 드리기 어려워요. 잘못된 정보를 드리지 않도록 펜션에 직접 확인해 주세요.\n📞 ${PHONE}`,
@@ -220,6 +231,8 @@
     // 관광지는 '추천'보다 먼저 봄 ("해수욕장 추천", "주변 관광지 추천"이 인원 질문으로 가지 않게)
     const spots = findSpots(t);
     if (spots.length) return ansSpots(spots);
+    const theme = (SITE.themes || []).find(th => th.keys.some(k => t.includes(k)));
+    if (theme) return ansTheme(theme);
     if (has(/관광|근처|주변|가볼|가 볼|놀거리|볼거리|여행지|코스|명소|구경/)) return ansSpots();
     if (has(/추천|어떤\s?방|어느\s?방|몇\s?명|인원/)) return ansAskPeople();
     const faq = (SITE.faq || []).find(f => f.keys.some(k => t.includes(k)));
