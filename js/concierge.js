@@ -148,9 +148,16 @@
     };
   }
 
-  function ansSpots(spot) {
+  // 질문에 관광지 이름 또는 site.json spots[].keys 의 낱말(예: 해수욕 → 진하해수욕장)이 있으면 그 관광지
+  function findSpots(t) {
+    return (SITE.spots || []).filter(s =>
+      s.name.split(/[ ·]/).filter(w => w.length > 1).concat(s.keys || []).some(w => t.includes(w)));
+  }
+
+  function ansSpots(spots) {
     const map = s => ({ label: `🗺️ ${s.name} 지도`, href: `https://map.naver.com/p/search/${encodeURIComponent(s.query || s.name)}`, blank: true });
-    if (spot) return { html: `<b>${esc(spot.name)}</b> (${esc(spot.dist)})\n${esc(spot.sub)}\n${esc(spot.text)}`, acts: [map(spot)] };
+    const one = s => `📍 <b>${esc(s.name)}</b> (펜션에서 ${esc(s.dist)})\n${esc(s.sub)}\n${esc(s.text)}`;
+    if (spots && spots.length) return { html: spots.map(one).join('\n\n'), acts: spots.slice(0, 3).map(map) };
     const lines = (SITE.spots || []).map(s => `<li><b>${esc(s.name)}</b> ${esc(s.dist)} — ${esc(s.sub)}</li>`).join('');
     return {
       html: `펜션 주변 가 볼 만한 곳이에요.<ul>${lines}</ul>\n관광지 이름을 물어보시면 자세히 알려 드릴게요.`,
@@ -181,10 +188,12 @@
     adora: ['아도라', 'adora', '542'], harby: ['하비', 'hobby', 'harby', '495'], pursuit: ['퍼슈트', 'pursuit', '530'],
     gureum: ['구름'], bada: ['바다객실', '바다 객실', '바다방', '바다룸', '바다펜션', '바다 펜션', '바다호'], mujigae: ['무지개'], deckzone: ['데크존', '데크 존', '캠핑데크', '텐트'],
   };
+  const COMMON = ['바다'];
   function findRoom(t) {
     const low = t.toLowerCase();
     for (const r of ROOMS) {
-      const keys = (ALIAS[r.id] || []).concat(r.name.toLowerCase());
+      // '바다'처럼 흔한 낱말인 객실 이름은 이름만으로는 찾지 않음 ("바다 보이나요?" ≠ 바다 객실)
+      const keys = (ALIAS[r.id] || []).concat(COMMON.includes(r.name) ? [] : r.name.toLowerCase());
       if (keys.some(k => low.includes(k))) return r;
     }
     if (/^\s*바다\s*[?？]?\s*$/.test(t)) return ROOMS.find(r => r.id === 'bada');
@@ -208,10 +217,11 @@
     if (has(/예약|예매|잡고|방법/)) return ansBooking();
     if (has(/성수기|주말\s?요금/)) { const f = (SITE.faq || []).find(x => x.q === '성수기'); if (f) return { html: esc(f.a), acts: [] }; }
     if (wantPrice) return ansAllPrice();
+    // 관광지는 '추천'보다 먼저 봄 ("해수욕장 추천", "주변 관광지 추천"이 인원 질문으로 가지 않게)
+    const spots = findSpots(t);
+    if (spots.length) return ansSpots(spots);
+    if (has(/관광|근처|주변|가볼|가 볼|놀거리|볼거리|여행지|코스|명소|구경/)) return ansSpots();
     if (has(/추천|어떤\s?방|어느\s?방|몇\s?명|인원/)) return ansAskPeople();
-    const spot = (SITE.spots || []).find(s => s.name.split(/[ ·]/).filter(w => w.length > 1).some(w => t.includes(w)));
-    if (spot) return ansSpots(spot);
-    if (has(/관광|근처|주변|가볼|가 볼|놀거리|볼거리|여행지|코스|명소/)) return ansSpots();
     const faq = (SITE.faq || []).find(f => f.keys.some(k => t.includes(k)));
     if (faq) {
       const acts = /주소|위치|길찾기|어디|오시는/.test(t) && SITE.contact
