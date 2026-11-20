@@ -1,0 +1,360 @@
+/* ============ AI 숙박 도우미 ============
+ * 화면 오른쪽 아래 로봇을 누르면 상담 창이 열립니다.
+ *
+ * 지금은 "정해진 답변형"입니다. 객실 · 인원 · 요금은 data/prices.json, 시설 · 관광지 · 자주 묻는 질문은
+ * data/site.json 에서 읽어 답하므로, 관리자 화면에서 요금을 바꾸면 도우미 답도 같이 바뀝니다.
+ * 모르는 내용은 지어내지 않고 전화 문의로 안내하며, 예약 확정 · 빈 객실 여부는 말하지 않습니다
+ * (빈 객실은 실시간 예약 화면에서만 확인).
+ *
+ * 나중에 진짜 AI(Claude 등)를 붙일 때:
+ *   1) 예약 서버(server.py)에 POST /api/public/chat 을 만들고 API 키는 서버에만 둡니다 (이 파일 · GitHub 에 키 넣지 않기).
+ *   2) js/booking-config.js 에 window.DHC_CHAT_AI = true 를 넣으면 질문을 서버로 보내고,
+ *      서버가 응답하지 않으면 아래 정해진 답변으로 대신 답합니다.
+ *      요청 { message, history:[{role,text}] } → 응답 { reply: '텍스트' }
+ * new.html 이 아닌 다른 화면(reserve.html 등)에 붙여도 혼자 데이터를 읽어 동작합니다.
+ */
+(() => {
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const won = n => Number(n).toLocaleString('ko-KR');
+  const GROUP = { caravan: '카라반', pension: '펜션', deck: '데크존' };
+  let PRICE = null, SITE = null, ROOMS = [], PHONE = '010-4589-1415';
+  const history = [];
+
+  // 그림 안 색(gradient) 이름이 겹치면 숨긴 쪽 그림 때문에 안 보이므로 쓸 때마다 이름을 다르게
+  const ROBOT = k => `<svg viewBox="0 0 120 120" aria-hidden="true">
+    <defs>
+      <radialGradient id="cgBody${k}" cx="40%" cy="30%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#e9eef2"/><stop offset="1" stop-color="#b9c6cf"/></radialGradient>
+      <linearGradient id="cgFace${k}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d4d68"/><stop offset="1" stop-color="#0b2233"/></linearGradient>
+      <radialGradient id="cgEye${k}" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#fff6dd"/><stop offset=".5" stop-color="#f3c977"/><stop offset="1" stop-color="#D5A65A"/></radialGradient>
+      <radialGradient id="cgBg${k}" cx="50%" cy="35%" r="70%"><stop offset="0" stop-color="#4f97b0"/><stop offset="1" stop-color="#102C40"/></radialGradient>
+    </defs>
+    <circle cx="60" cy="60" r="58" fill="url(#cgBg${k})"/>
+    <line x1="60" y1="24" x2="60" y2="14" stroke="#D5A65A" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="60" cy="12" r="5" fill="url(#cgEye${k})"/>
+    <rect x="22" y="48" width="9" height="20" rx="4.5" fill="#cfd9e0"/>
+    <rect x="89" y="48" width="9" height="20" rx="4.5" fill="#cfd9e0"/>
+    <rect x="28" y="24" width="64" height="58" rx="24" fill="url(#cgBody${k})"/>
+    <rect x="35" y="36" width="50" height="32" rx="15" fill="url(#cgFace${k})"/>
+    <ellipse cx="48" cy="51" rx="5.5" ry="6.5" fill="url(#cgEye${k})"><animate attributeName="ry" values="6.5;6.5;0.8;6.5;6.5" keyTimes="0;.9;.94;.98;1" dur="4s" repeatCount="indefinite"/></ellipse>
+    <ellipse cx="72" cy="51" rx="5.5" ry="6.5" fill="url(#cgEye${k})"><animate attributeName="ry" values="6.5;6.5;0.8;6.5;6.5" keyTimes="0;.9;.94;.98;1" dur="4s" repeatCount="indefinite"/></ellipse>
+    <path d="M53 60 q7 5 14 0" stroke="#D5A65A" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+    <ellipse cx="44" cy="30" rx="12" ry="4" fill="#fff" opacity=".7"/>
+    <path d="M38 86 h44 a8 8 0 0 1 8 8 v8 a22 22 0 0 1 -60 0 v-8 a8 8 0 0 1 8 -8z" fill="url(#cgBody${k})"/>
+    <circle cx="60" cy="96" r="5" fill="#D5A65A"/>
+  </svg>`;
+
+  /* ---------- 데이터 ---------- */
+  async function loadData() {
+    if (window.DHC && window.DHC.PRICE) { ({ PRICE, SITE, ROOMS } = window.DHC); }
+    else {
+      const get = u => fetch(u + '?t=' + Date.now()).then(r => r.json());
+      [PRICE, SITE] = await Promise.all([get('data/prices.json'), get('data/site.json')]);
+      ROOMS = PRICE.rooms || [];
+    }
+    PHONE = (SITE.contact && SITE.contact.phone) || PHONE;
+  }
+  const detail = r => (SITE.rooms && SITE.rooms[r.id]) || {};
+  const extraFree = r => /없음/.test(r.extra || '');
+  const extraPP = r => extraFree(r) ? 0 : +((r.extra || '').match(/([\d,]+)\s*원/) || [, '0'])[1].replace(/,/g, '');
+  const reserveUrl = () => (SITE.contact && SITE.contact.reserveUrl) || 'reserve.html';
+  const onHome = () => !!document.getElementById('reserve') && !!window.DHC;
+
+  /* ---------- 답변 만들기 ---------- */
+  const callBtn = () => ({ label: `📞 전화 예약하기`, href: `tel:${PHONE}`, cls: 'gold' });
+  const bookBtn = (room) => onHome()
+    ? { label: '📅 실시간 예약하기', act: () => room ? window.DHC.pickRoom(room) : document.getElementById('reserve').scrollIntoView({ behavior: 'smooth' }), cls: 'pri', close: true }
+    : { label: '📅 실시간 예약하기', href: reserveUrl(), cls: 'pri' };
+  const roomBtn = r => onHome()
+    ? { label: `📷 ${r.name} 사진 보기`, act: () => window.DHC.openRoom(r.id), close: true }
+    : null;
+
+  function recommend(n) {
+    return ROOMS.filter(r => r.group !== 'deck' && r.max >= n).map(r => {
+      const extraN = Math.max(0, n - r.std);
+      const extraCost = extraN * extraPP(r);
+      return { r, extraN, extraCost, fits: extraN === 0 || extraFree(r) ? 0 : 1, total: r.price.normal[0] + extraCost };
+    }).sort((a, b) => a.fits - b.fits || a.total - b.total || a.r.std - b.r.std);
+  }
+
+  function ansPeople(n) {
+    const maxAll = Math.max(...ROOMS.filter(r => r.group !== 'deck').map(r => r.max));
+    if (n > maxAll) {
+      const big = ROOMS.filter(r => r.group === 'pension').sort((a, b) => b.max - a.max)[0];
+      return {
+        html: `${n}명이면 한 객실로는 어렵고 <b>여러 객실을 함께</b> 예약하셔야 해요.\n가장 큰 객실은 <b>${esc(big.name)}</b>(기준 ${big.std}명 · 최대 ${big.max}명)입니다. 실시간 예약에서 한 번에 여러 객실을 고를 수 있고, 단체는 전화로 상담해 드려요.`,
+        acts: [bookBtn(), callBtn()],
+      };
+    }
+    const list = recommend(n);
+    const top = list.filter(x => !x.fits).slice(0, 3);
+    const show = top.length ? top : list.slice(0, 3);
+    const first = show[0].r;
+    const lines = show.map(x => {
+      const r = x.r;
+      const ex = !x.extraN ? '' : extraFree(r) ? ' · 추가 인원 비용 없음' : ` · 추가 ${x.extraN}명 +${won(x.extraCost)}원/박`;
+      return `<li><b>${esc(r.name)}</b> (${esc(GROUP[r.group])}) 기준 ${r.std}명 · 최대 ${r.max}명${ex} · ${won(r.price.normal[0])}원~</li>`;
+    }).join('');
+    const why = first.group === 'pension' && first.std >= 8 ? '가족 · 단체 숙박에 적합합니다.'
+      : first.group === 'pension' ? '추가 인원 비용 없이 넉넉하게 머물 수 있어요.'
+      : '바다를 마주한 유럽형 카라반에서 감성 캠핑을 즐길 수 있어요.';
+    const more = list.length > show.length ? `\n이 밖에도 ${list.length - show.length}개 객실에 머물 수 있어요.` : '';
+    return {
+      html: `<b>${n}명</b>이면 <b>${esc(first.name)}</b> 객실을 추천합니다. ${why}<ul>${lines}</ul>${more}\n요금은 비수기 평일 기준이며, 빈 객실은 날짜를 고르면 실시간 예약에서 확인됩니다.`,
+      acts: [roomBtn(first), bookBtn(first.id), callBtn()].filter(Boolean),
+    };
+  }
+
+  function ansRoom(r, wantPrice) {
+    const d = detail(r), p = r.price;
+    const priceHtml = `<ul><li>비수기 평일 ${won(p.normal[0])}원 · 주말 ${won(p.normal[1])}원</li><li>성수기 평일 ${won(p.peak[0])}원 · 주말 ${won(p.peak[1])}원</li></ul>`;
+    const extra = extraFree(r) ? '추가 인원 비용 없음' : r.extra;
+    const html = wantPrice
+      ? `<b>${esc(r.name)}</b> 1박 요금 (기준 ${r.std}명)${priceHtml}${esc(extra)}`
+      : `<b>${esc(r.name)}</b> · ${esc(d.type || GROUP[r.group])} · ${esc(d.view || r.badge)}\n${esc(d.intro || r.desc)}<ul>
+          <li>기준 ${r.std}명 · 최대 ${r.max}명 (${esc(extra)})</li>
+          ${d.facilities && d.facilities.length ? `<li>시설: ${esc(d.facilities.join(' · '))}</li>` : ''}
+          <li>1박 ${won(p.normal[0])}원~ (비수기 평일)</li></ul>`;
+    return { html, acts: [roomBtn(r), bookBtn(r.id), callBtn()].filter(Boolean) };
+  }
+
+  function ansAllPrice() {
+    const lines = ROOMS.map(r => `<li><b>${esc(r.name)}</b> ${won(r.price.normal[0])}원~ (성수기 주말 ${won(r.price.peak[1])}원)</li>`).join('');
+    const note = (PRICE.notes || []).slice(0, 3).map(n => n.replace(/<[^>]+>/g, '')).join('\n');
+    return { html: `1박 요금 (기준 인원, 비수기 평일부터)<ul>${lines}</ul>\n${esc(note)}`, acts: [onHome() ? { label: '요금표 보기', act: () => document.getElementById('price').scrollIntoView({ behavior: 'smooth' }), close: true } : null, bookBtn()].filter(Boolean) };
+  }
+
+  function ansRooms() {
+    const by = g => ROOMS.filter(r => r.group === g);
+    const line = r => `<li><b>${esc(r.name)}</b> 기준 ${r.std}명 · 최대 ${r.max}명${extraFree(r) ? ' · 추가 인원 비용 없음' : ''}</li>`;
+    return {
+      html: `객실은 이렇게 있어요.\n🚐 <b>카라반</b><ul>${by('caravan').map(line).join('')}</ul>\n🏠 <b>펜션</b><ul>${by('pension').map(line).join('')}</ul>\n⛺ <b>데크존</b><ul>${by('deck').map(line).join('')}</ul>\n인원을 알려 주시면 맞는 객실을 추천해 드릴게요. (예: "가족 5명")`,
+      acts: [],
+    };
+  }
+
+  function ansFacilities() {
+    const a = (SITE.amenities || []).map(x => `<li>${esc(x.icon)} <b>${esc(x.title)}</b> — ${esc(x.text)}</li>`).join('');
+    return { html: `동해카라반펜션 시설 안내<ul>${a}</ul>\n객실별 시설은 객실 이름으로 물어봐 주세요. (예: "무지개 시설")`, acts: [] };
+  }
+
+  function ansBooking() {
+    return {
+      html: `예약은 두 가지 방법이 있어요.\n<b>① 실시간 예약</b> — 날짜를 고르면 빈 객실과 요금이 바로 나오고, 무통장입금으로 결제합니다. 입금 계좌와 기한은 문자로 안내돼요.\n<b>② 전화 예약</b> — ${PHONE}\n예약 확인 · 취소는 예약자 이름과 휴대폰 번호로 조회할 수 있습니다.`,
+      acts: [bookBtn(), callBtn(), { label: '예약 조회', href: 'reserve.html#lookup' }],
+    };
+  }
+
+  function ansSpots(spot) {
+    const map = s => ({ label: `🗺️ ${s.name} 지도`, href: `https://map.naver.com/p/search/${encodeURIComponent(s.query || s.name)}`, blank: true });
+    if (spot) return { html: `<b>${esc(spot.name)}</b> (${esc(spot.dist)})\n${esc(spot.sub)}\n${esc(spot.text)}`, acts: [map(spot)] };
+    const lines = (SITE.spots || []).map(s => `<li><b>${esc(s.name)}</b> ${esc(s.dist)} — ${esc(s.sub)}</li>`).join('');
+    return {
+      html: `펜션 주변 가 볼 만한 곳이에요.<ul>${lines}</ul>\n관광지 이름을 물어보시면 자세히 알려 드릴게요.`,
+      acts: [onHome() ? { label: '관광지 자세히 보기', act: () => document.getElementById('location').scrollIntoView({ behavior: 'smooth' }), close: true } : null].filter(Boolean),
+    };
+  }
+
+  const ansPhone = () => ({ html: `전화 예약 · 문의는 아래 번호로 연락해 주세요.\n<b style="font-size:18px">${PHONE}</b>`, acts: [callBtn()] });
+  const ansUnknown = () => ({
+    html: `죄송해요, 그 내용은 제가 정확히 안내해 드리기 어려워요. 잘못된 정보를 드리지 않도록 펜션에 직접 확인해 주세요.\n📞 ${PHONE}`,
+    acts: [callBtn()],
+  });
+  const ansAskPeople = () => ({ html: '몇 명이 방문하시나요? 영 · 유아를 포함한 인원을 알려 주세요.', acts: [2, 4, 6, 8, 10, 12].map(n => ({ label: `${n}명`, say: `${n}명` })) });
+
+  /* 인원 읽기: "10명", "어른 4명 아이 2명", "가족 열 명", "4인" → 합계 */
+  const KNUM = { 한: 1, 두: 2, 세: 3, 네: 4, 다섯: 5, 여섯: 6, 일곱: 7, 여덟: 8, 아홉: 9 };
+  function parsePeople(t) {
+    let sum = 0, hit = false;
+    t.replace(/(\d{1,2})\s*(명|인(?!원|분)|사람)/g, (_, n) => { sum += +n; hit = true; });
+    t.replace(/(열)?\s*(한|두|세|네|다섯|여섯|일곱|여덟|아홉)?\s*(명|사람)/g, (m, ten, one) => {
+      if (!ten && !one) return;
+      sum += (ten ? 10 : 0) + (one ? KNUM[one] : 0); hit = true;
+    });
+    return hit ? sum : 0;
+  }
+
+  const ALIAS = {
+    adora: ['아도라', 'adora', '542'], harby: ['하비', 'hobby', 'harby', '495'], pursuit: ['퍼슈트', 'pursuit', '530'],
+    gureum: ['구름'], bada: ['바다객실', '바다 객실', '바다방', '바다룸', '바다펜션', '바다 펜션', '바다호'], mujigae: ['무지개'], deckzone: ['데크존', '데크 존', '캠핑데크', '텐트'],
+  };
+  function findRoom(t) {
+    const low = t.toLowerCase();
+    for (const r of ROOMS) {
+      const keys = (ALIAS[r.id] || []).concat(r.name.toLowerCase());
+      if (keys.some(k => low.includes(k))) return r;
+    }
+    if (/^\s*바다\s*[?？]?\s*$/.test(t)) return ROOMS.find(r => r.id === 'bada');
+    return null;
+  }
+
+  function answer(raw) {
+    const t = raw.trim();
+    if (!t) return null;
+    const has = re => re.test(t);
+    if (has(/전화|통화|연락처|번호/)) return ansPhone();
+    if (has(/반려|강아지|애견|고양이|펫/)) return ansUnknown();
+    const n = parsePeople(t);
+    if (n) return ansPeople(n);
+    const room = findRoom(t);
+    const wantPrice = has(/요금|가격|얼마|비용|금액|가격표/);
+    if (room) return ansRoom(room, wantPrice);
+    if (has(/빈\s?방|빈\s?객실|예약\s?가능|자리\s?있|남은\s?방|예약\s?돼|예약\s?확정|확정/)) {
+      return { html: `빈 객실과 예약 확정 여부는 제가 확인해 드릴 수 없어요. <b>실시간 예약</b>에서 날짜를 고르면 바로 확인되고, 예약 후 상태는 예약 조회에서 볼 수 있습니다.`, acts: [bookBtn(), { label: '예약 조회', href: 'reserve.html#lookup' }, callBtn()] };
+    }
+    if (has(/예약|예매|잡고|방법/)) return ansBooking();
+    if (has(/성수기|주말\s?요금/)) { const f = (SITE.faq || []).find(x => x.q === '성수기'); if (f) return { html: esc(f.a), acts: [] }; }
+    if (wantPrice) return ansAllPrice();
+    if (has(/추천|어떤\s?방|어느\s?방|몇\s?명|인원/)) return ansAskPeople();
+    const spot = (SITE.spots || []).find(s => s.name.split(/[ ·]/).filter(w => w.length > 1).some(w => t.includes(w)));
+    if (spot) return ansSpots(spot);
+    if (has(/관광|근처|주변|가볼|가 볼|놀거리|볼거리|여행지|코스|명소/)) return ansSpots();
+    const faq = (SITE.faq || []).find(f => f.keys.some(k => t.includes(k)));
+    if (faq) {
+      const acts = /주소|위치|길찾기|어디|오시는/.test(t) && SITE.contact
+        ? [{ label: '네이버 지도', href: SITE.contact.naverMap, blank: true }, { label: '카카오맵', href: SITE.contact.kakaoMap, blank: true }] : [];
+      return { html: esc(faq.a), acts };
+    }
+    if (has(/시설|편의|비품|부대/)) return ansFacilities();
+    if (has(/객실|방\b|카라반|펜션|종류/)) return ansRooms();
+    if (has(/^(안녕|하이|hi|hello)/i)) return { html: '안녕하세요! 무엇이 궁금하신가요? 아래 버튼을 누르거나 편하게 물어봐 주세요.', acts: [] };
+    if (has(/고마|감사|땡큐/)) return { html: '도움이 되었다니 기뻐요. 동해에서 좋은 추억 만드세요! 🌅', acts: [] };
+    return ansUnknown();
+  }
+
+  /* ---------- 진짜 AI 서버 연결 (설정했을 때만) ---------- */
+  async function askServer(text) {
+    const res = await fetch((window.DHC_API_BASE || '') + '/api/public/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, history: history.slice(-10) }),
+    });
+    if (!res.ok) throw new Error('chat');
+    const j = await res.json();
+    if (!j.reply) throw new Error('chat');
+    return { html: esc(j.reply), acts: [bookBtn(), callBtn()] };
+  }
+
+  /* ---------- 화면 ---------- */
+  let log, input, panel, launch, tip;
+  function build() {
+    launch = document.createElement('button');
+    launch.className = 'cg-launch';
+    launch.type = 'button';
+    launch.setAttribute('aria-label', 'AI 숙박 도우미 열기');
+    launch.innerHTML = ROBOT('L') + '<span class="cg-dot"></span>';
+    tip = document.createElement('div');
+    tip.className = 'cg-tip'; tip.hidden = true;
+    tip.textContent = '객실 추천 · 요금 · 예약, 무엇이든 물어보세요!';
+    panel = document.createElement('section');
+    panel.className = 'cg-panel'; panel.hidden = true;
+    panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'AI 숙박 도우미');
+    panel.innerHTML = `
+      <div class="cg-head"><span class="av">${ROBOT('H')}</span><div><b>AI 숙박 도우미</b><small>객실 · 요금 · 예약 · 관광 안내</small></div><button class="x" type="button" aria-label="닫기">✕</button></div>
+      <div class="cg-log" aria-live="polite"></div>
+      <div class="cg-chips">${['객실 추천', '객실별 인원', '시설 안내', '요금 안내', '예약 방법', '주변 관광지', '전화 예약'].map(c => `<button type="button">${c}</button>`).join('')}</div>
+      <form class="cg-form"><input type="text" placeholder="예: 가족 10명이 방문하려고 해요" aria-label="질문 입력" maxlength="200" enterkeyhint="send"><button type="submit" aria-label="보내기">↑</button></form>
+      <p class="cg-foot">안내용 자동 답변입니다 · 예약 확정은 실시간 예약 또는 전화로</p>`;
+    document.body.append(tip, launch, panel);
+    log = panel.querySelector('.cg-log');
+    input = panel.querySelector('input');
+
+    launch.addEventListener('click', open);
+    tip.addEventListener('click', open);
+    panel.querySelector('.x').addEventListener('click', close);
+    panel.querySelector('.cg-form').addEventListener('submit', e => { e.preventDefault(); send(input.value); input.value = ''; });
+    panel.querySelector('.cg-chips').addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      const map = { '객실 추천': '객실 추천해 주세요', '객실별 인원': '객실 종류와 인원 알려 주세요', '시설 안내': '시설 안내', '요금 안내': '요금 알려 주세요', '예약 방법': '예약 방법', '주변 관광지': '주변 관광지 추천', '전화 예약': '전화 예약' };
+      send(map[b.textContent] || b.textContent, b.textContent);
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && !panel.hidden) close(); });
+
+    // 처음 온 손님에게 한 번만 말풍선
+    try {
+      if (!sessionStorage.getItem('dhc_cg_tip')) {
+        setTimeout(() => { if (panel.hidden) tip.hidden = false; }, 4000);
+        setTimeout(() => { tip.hidden = true; }, 14000);
+        sessionStorage.setItem('dhc_cg_tip', '1');
+      }
+    } catch { /* 개인 정보 보호 모드 */ }
+  }
+
+  let greeted = false;
+  function open() {
+    tip.hidden = true;
+    launch.querySelector('.cg-dot')?.remove();
+    panel.hidden = false;
+    launch.hidden = true;
+    if (!greeted) {
+      greeted = true;
+      addBot({
+        html: '안녕하세요!\n<b>동해카라반펜션 AI 숙박 도우미</b>입니다.\n\n객실 안내부터 인원별 객실 추천,\n예약 및 주변 관광 정보까지 안내해 드립니다.\n\n무엇이 궁금하신가요?',
+        acts: [],
+      });
+    }
+    if (matchMedia('(min-width: 641px)').matches) input.focus();
+  }
+  function close() { panel.hidden = true; launch.hidden = false; }
+
+  function addMe(text) {
+    const d = document.createElement('div');
+    d.className = 'cg-msg me'; d.textContent = text;
+    log.appendChild(d);
+  }
+  function addBot(a) {
+    const d = document.createElement('div');
+    d.className = 'cg-msg bot';
+    d.innerHTML = a.html;
+    const acts = (a.acts || []).filter(Boolean);
+    if (acts.length) {
+      const box = document.createElement('div');
+      box.className = 'cg-acts';
+      acts.forEach(x => {
+        const el = document.createElement(x.href ? 'a' : 'button');
+        el.textContent = x.label;
+        if (x.cls) el.className = x.cls;
+        if (x.href) { el.href = x.href; if (x.blank) { el.target = '_blank'; el.rel = 'noopener'; } }
+        else el.type = 'button';
+        el.addEventListener('click', () => {
+          if (x.say) send(x.say);
+          if (x.act) { if (x.close || matchMedia('(max-width: 640px)').matches) close(); x.act(); }
+        });
+        box.appendChild(el);
+      });
+      d.appendChild(box);
+    }
+    log.appendChild(d);
+    d.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+
+  let busy = false;
+  async function send(text, shown) {
+    text = (text || '').trim();
+    if (!text || busy) return;
+    busy = true;
+    addMe(shown || text);
+    history.push({ role: 'user', text });
+    const typing = document.createElement('div');
+    typing.className = 'cg-typing'; typing.innerHTML = '<i></i><i></i><i></i>';
+    log.appendChild(typing);
+    log.scrollTop = log.scrollHeight;
+    let a = null;
+    if (window.DHC_CHAT_AI) { try { a = await askServer(text); } catch { a = null; } }
+    if (!a) { await new Promise(r => setTimeout(r, 450)); a = answer(text) || ansUnknown(); }
+    typing.remove();
+    addBot(a);
+    history.push({ role: 'bot', text: a.html.replace(/<[^>]+>/g, '') });
+    busy = false;
+  }
+
+  async function start() {
+    try { await loadData(); } catch { return; }   // 데이터를 못 읽으면 도우미를 띄우지 않음
+    build();
+  }
+  if (window.DHC) start();
+  else if (document.getElementById('reserve') && document.querySelector('script[src*="home.js"]')) document.addEventListener('dhc:ready', start, { once: true });
+  else start();
+
+  // 확인용 (개발자 도구에서 DhcConcierge.answer('10명') 처럼 시험)
+  window.DhcConcierge = { answer: t => { const a = answer(t); return a && a.html.replace(/<[^>]+>/g, ''); } };
+})();

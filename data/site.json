@@ -1,0 +1,724 @@
+{
+  "_설명": "새 홈페이지(new.html)와 AI 숙박 도우미가 읽는 안내 데이터. 객실 이름·인원·요금은 data/prices.json(관리자 화면 요금 관리)에서 읽고, 여기에는 화면 문구·사진·시설만 둡니다.",
+  "contact": {
+    "name": "동해카라반펜션",
+    "phone": "010-4589-1415",
+    "address": "울산광역시 울주군 온산읍 강양길 162",
+    "bizNo": "120-13-01206",
+    "reserveUrl": "reserve.html",
+    "lookupUrl": "reserve.html#lookup",
+    "homeUrl": "https://syyoon2-dhc.github.io/dhcaravan/",
+    "checkin": "15:00",
+    "checkout": "11:00",
+    "naverMap": "https://map.naver.com/p/search/울산광역시 울주군 온산읍 강양길 162",
+    "kakaoMap": "https://map.kakao.com/link/search/울산광역시 울주군 온산읍 강양길 162",
+    "tmap": "tmap://search?name=%EC%9A%B8%EC%82%B0%EA%B4%91%EC%97%AD%EC%8B%9C%20%EC%9A%B8%EC%A3%BC%EA%B5%B0%20%EC%98%A8%EC%82%B0%EC%9D%8D%20%EA%B0%95%EC%96%91%EA%B8%B8%20162"
+  },
+  "notices": [],
+  "hero": {
+    "video": "images/home/sunrise.mp4",
+    "videoMobile": "images/home/sunrise-m.mp4",
+    "slides": [
+      {
+        "img": "images/home/hero-sunrise.webp",
+        "m": "images/home/hero-sunrise-m.webp",
+        "alt": "펜션 앞바다에서 떠오르는 동해 일출",
+        "video": true
+      },
+      {
+        "img": "images/home/hero-ocean.webp",
+        "m": "images/home/hero-ocean-m.webp",
+        "alt": "하늘에서 본 강양항과 진하 앞바다"
+      },
+      {
+        "img": "images/home/hero-dusk.webp",
+        "m": "images/home/hero-dusk-m.webp",
+        "alt": "조명이 켜진 저녁 카라반 데크와 바다"
+      },
+      {
+        "img": "images/home/hero-night.webp",
+        "m": "images/home/hero-night-m.webp",
+        "alt": "펜션에서 내려다본 강양항 밤바다"
+      }
+    ],
+    "eyebrow": "PREMIUM OCEAN VIEW STAY",
+    "title": "동해의 아침을<br>가장 가까이에서 만나는 곳",
+    "sub": "울산 강양항 오션뷰 · 객실에서 바라보는 동해 일출<br>카라반과 펜션에서 즐기는 특별한 하루"
+  },
+  "about": [
+    {
+      "no": "01",
+      "title": "강양항 일출 명소",
+      "text": "수평선 위로 해가 떠오르는 강양항 바로 앞. 따로 나가지 않아도 숙소에서 동해 일출을 만납니다.",
+      "img": "images/home/g/sunrise-3-t.webp"
+    },
+    {
+      "no": "02",
+      "title": "객실에서 감상하는 동해바다",
+      "text": "언덕 위에 자리해 카라반 데크와 펜션 테라스 어디서나 탁 트인 바다가 펼쳐집니다.",
+      "img": "images/home/g/pension-3-t.webp"
+    },
+    {
+      "no": "03",
+      "title": "가족 · 단체 숙박",
+      "text": "최대 12명이 함께 머무는 무지개 객실과 4~6명 펜션 객실. 펜션 객실은 인원 추가 비용이 없습니다.",
+      "img": "images/home/g/pension-1-t.webp"
+    },
+    {
+      "no": "04",
+      "title": "유럽형 카라반 3대",
+      "text": "아도라 · 하비 · 퍼슈트. 전용 캐노피 데크에서 바다를 보며 감성 캠핑을 즐기세요.",
+      "img": "images/home/g/caravan-1-t.webp"
+    },
+    {
+      "no": "05",
+      "title": "주변 관광지 접근성",
+      "text": "명선교 · 진하해수욕장은 걸어서, 간절곶 · 서생포왜성 · 골프장은 차로 10~15분.",
+      "img": "images/home/g/ocean-1-t.webp"
+    }
+  ],
+  "experiences": [
+    {
+      "title": "객실에서 감상하는 동해 일출",
+      "text": "객실 앞 데크와 테라스에서 붉게 물드는 수평선을 바라보세요. 일출 명소를 찾아 멀리 나갈 필요가 없습니다.",
+      "img": "images/home/g/sunrise-1.webp",
+      "tag": "SUNRISE"
+    },
+    {
+      "title": "강양항 겨울 일출 출사",
+      "text": "해가 낮게 뜨는 겨울, 항구와 바다 위로 떠오르는 해는 사진가들이 찾는 장면입니다. 숙소에서 몇 걸음이면 촬영 포인트입니다.",
+      "img": "images/home/g/sunrise-2.webp",
+      "tag": "PHOTO"
+    },
+    {
+      "title": "오션뷰 바비큐",
+      "text": "웨버 그릴과 숯을 준비해 드립니다. 바다 바람을 맞으며 즐기는 저녁 바비큐.",
+      "img": "images/home/g/bbq-1.webp",
+      "tag": "BBQ"
+    },
+    {
+      "title": "가족 · 단체 여행",
+      "text": "넓은 펜션 객실과 데크, 여름 수영장, 추억의 월광보합 오락기까지. 아이부터 어른까지 함께 즐깁니다.",
+      "img": "images/home/g/pension-4.webp",
+      "tag": "FAMILY"
+    },
+    {
+      "title": "강양항 야경 · 주변 관광",
+      "text": "밤이면 불빛이 켜지는 해안 산책로와 명선교 · 명선도 야경. 낮에는 진하해수욕장과 간절곶으로.",
+      "img": "images/home/g/night-1.webp",
+      "tag": "NIGHT"
+    }
+  ],
+  "rooms": {
+    "adora": {
+      "type": "유럽형 카라반",
+      "view": "오션 전면뷰",
+      "intro": "바다를 정면으로 마주한 프리미엄 유럽형 카라반. 기준 2인, 최대 5인까지 머물 수 있습니다.",
+      "spaces": [
+        "카라반 실내",
+        "전용 캐노피 데크 · 바비큐 공간"
+      ],
+      "facilities": [
+        "침실",
+        "소파 · 식탁",
+        "주방",
+        "화장실",
+        "전용 데크"
+      ]
+    },
+    "harby": {
+      "type": "유럽형 카라반",
+      "view": "오션 전면뷰",
+      "intro": "아늑한 분위기의 오션 전면뷰 카라반. 커플 · 소가족 여행에 좋습니다.",
+      "spaces": [
+        "카라반 실내",
+        "전용 캐노피 데크 · 바비큐 공간"
+      ],
+      "facilities": [
+        "침실",
+        "소파 · 식탁",
+        "주방",
+        "화장실",
+        "전용 데크"
+      ]
+    },
+    "pursuit": {
+      "type": "유럽형 카라반",
+      "view": "오션 측면뷰",
+      "intro": "실속 있게 즐기는 오션 측면뷰 카라반. 합리적인 요금으로 바다 캠핑을 즐기세요.",
+      "spaces": [
+        "카라반 실내",
+        "전용 캐노피 데크 · 바비큐 공간"
+      ],
+      "facilities": [
+        "침실",
+        "소파 · 식탁",
+        "주방",
+        "화장실",
+        "전용 데크"
+      ]
+    },
+    "gureum": {
+      "type": "펜션 객실",
+      "view": "오션뷰",
+      "intro": "가족 여행에 좋은 아늑한 펜션 객실. 인원 추가 비용 없이 최대 6명까지 머물 수 있습니다.",
+      "spaces": [
+        "거실",
+        "주방",
+        "화장실",
+        "데크 · 바비큐"
+      ],
+      "facilities": [
+        "거실",
+        "주방 · 식탁",
+        "화장실",
+        "바다 쪽 데크"
+      ]
+    },
+    "bada": {
+      "type": "펜션 객실",
+      "view": "오션뷰",
+      "intro": "푸른 바다가 보이는 편안한 펜션 객실. 인원 추가 비용 없이 최대 6명까지 머물 수 있습니다.",
+      "spaces": [
+        "거실",
+        "주방",
+        "화장실",
+        "데크 · 바비큐"
+      ],
+      "facilities": [
+        "거실",
+        "주방 · 식탁",
+        "화장실",
+        "바다 쪽 데크"
+      ]
+    },
+    "mujigae": {
+      "type": "펜션 단체 객실",
+      "view": "오션뷰",
+      "intro": "단체 모임 · 대가족에 좋은 넓은 객실. 방 2개 · 화장실 2개, 인원 추가 비용 없이 최대 12명까지.",
+      "spaces": [
+        "주방 · 식탁",
+        "큰방",
+        "작은방",
+        "화장실 2개",
+        "데크 · 바비큐"
+      ],
+      "facilities": [
+        "방 2개",
+        "주방 · 식탁",
+        "화장실 2개",
+        "바다 쪽 데크"
+      ]
+    },
+    "deckzone": {
+      "type": "캠핑 데크",
+      "view": "오션뷰",
+      "intro": "내 텐트로 즐기는 오션뷰 캠핑 데크. 텐트와 캠핑 장비는 직접 준비해 주세요.",
+      "spaces": [
+        "캠핑 데크"
+      ],
+      "facilities": [
+        "캠핑 데크",
+        "무료 주차"
+      ]
+    }
+  },
+  "amenities": [
+    {
+      "icon": "⏰",
+      "title": "입실 15:00 · 퇴실 11:00",
+      "text": "데크존 등 자세한 시간은 예약 시 안내"
+    },
+    {
+      "icon": "🔥",
+      "title": "바비큐 장비 대여",
+      "text": "웨버57(6~8인) 30,000원 · 웨버47(2~4인) 20,000원 · 숯 · 석쇠 · 장갑 포함"
+    },
+    {
+      "icon": "🕹️",
+      "title": "월광보합 무료",
+      "text": "추억의 오락기를 무료로 즐기세요 (2대, 선착순)"
+    },
+    {
+      "icon": "🏊",
+      "title": "여름 수영장",
+      "text": "여름 시즌 야외 간이 수영장 운영 (기간은 사전 문의)"
+    },
+    {
+      "icon": "🚗",
+      "title": "무료 주차",
+      "text": "펜션 내 무료 주차장"
+    },
+    {
+      "icon": "🚭",
+      "title": "실내 금연",
+      "text": "카라반 · 객실 내부 금연, 지정 장소 이용"
+    },
+    {
+      "icon": "🐟",
+      "title": "동해횟집 함께 운영",
+      "text": "숙소 바로 옆에서 그날 들어온 신선한 회"
+    }
+  ],
+  "galleryCats": [
+    {
+      "id": "all",
+      "name": "전체"
+    },
+    {
+      "id": "sunrise",
+      "name": "일출"
+    },
+    {
+      "id": "ocean",
+      "name": "바다 전망"
+    },
+    {
+      "id": "caravan",
+      "name": "카라반"
+    },
+    {
+      "id": "pension",
+      "name": "펜션"
+    },
+    {
+      "id": "bbq",
+      "name": "바비큐"
+    },
+    {
+      "id": "tour",
+      "name": "주변 관광지"
+    }
+  ],
+  "gallery": [
+    {
+      "src": "images/home/g/sunrise-1.webp",
+      "thumb": "images/home/g/sunrise-1-t.webp",
+      "cat": [
+        "sunrise",
+        "ocean"
+      ],
+      "alt": "펜션 앞바다에서 떠오르는 동해 일출"
+    },
+    {
+      "src": "images/home/g/sunrise-2.webp",
+      "thumb": "images/home/g/sunrise-2-t.webp",
+      "cat": [
+        "sunrise"
+      ],
+      "alt": "수평선 위로 해가 막 떠오르는 강양항 일출"
+    },
+    {
+      "src": "images/home/g/sunrise-3.webp",
+      "thumb": "images/home/g/sunrise-3-t.webp",
+      "cat": [
+        "sunrise"
+      ],
+      "alt": "구름 사이로 올라오는 겨울 일출"
+    },
+    {
+      "src": "images/home/g/ocean-1.webp",
+      "thumb": "images/home/g/ocean-1-t.webp",
+      "cat": [
+        "ocean"
+      ],
+      "alt": "하늘에서 본 강양항과 진하 앞바다",
+      "photo": 1
+    },
+    {
+      "src": "images/home/g/ocean-2.webp",
+      "thumb": "images/home/g/ocean-2-t.webp",
+      "cat": [
+        "ocean"
+      ],
+      "alt": "펜션 언덕에서 내려다본 동해 바다",
+      "photo": 18
+    },
+    {
+      "src": "images/home/g/ocean-3.webp",
+      "thumb": "images/home/g/ocean-3-t.webp",
+      "cat": [
+        "ocean"
+      ],
+      "alt": "펜션 앞 바다와 섬 풍경",
+      "photo": 24
+    },
+    {
+      "src": "images/home/g/ocean-4.webp",
+      "thumb": "images/home/g/ocean-4-t.webp",
+      "cat": [
+        "ocean",
+        "pension"
+      ],
+      "alt": "펜션 테라스에서 보이는 바다 전망"
+    },
+    {
+      "src": "images/home/g/caravan-1.webp",
+      "thumb": "images/home/g/caravan-1-t.webp",
+      "cat": [
+        "caravan",
+        "ocean"
+      ],
+      "alt": "카라반 캐노피 데크에서 보는 바다",
+      "photo": 2
+    },
+    {
+      "src": "images/home/g/caravan-2.webp",
+      "thumb": "images/home/g/caravan-2-t.webp",
+      "cat": [
+        "caravan",
+        "bbq"
+      ],
+      "alt": "조명이 켜진 저녁 카라반 데크",
+      "photo": 3
+    },
+    {
+      "src": "images/home/g/caravan-3.webp",
+      "thumb": "images/home/g/caravan-3-t.webp",
+      "cat": [
+        "caravan"
+      ],
+      "alt": "해 질 무렵 카라반 사이트",
+      "photo": 4
+    },
+    {
+      "src": "images/home/g/caravan-4.webp",
+      "thumb": "images/home/g/caravan-4-t.webp",
+      "cat": [
+        "caravan",
+        "ocean"
+      ],
+      "alt": "바다를 향한 카라반 데크 테이블",
+      "photo": 17
+    },
+    {
+      "src": "images/home/g/caravan-5.webp",
+      "thumb": "images/home/g/caravan-5-t.webp",
+      "cat": [
+        "caravan"
+      ],
+      "alt": "아드리아 카라반과 캐노피",
+      "photo": 22
+    },
+    {
+      "src": "images/home/g/caravan-6.webp",
+      "thumb": "images/home/g/caravan-6-t.webp",
+      "cat": [
+        "caravan"
+      ],
+      "alt": "하비 카라반과 캐노피 데크",
+      "photo": 23
+    },
+    {
+      "src": "images/home/g/caravan-7.webp",
+      "thumb": "images/home/g/caravan-7-t.webp",
+      "cat": [
+        "caravan"
+      ],
+      "alt": "나란히 선 유럽형 카라반",
+      "photo": 26
+    },
+    {
+      "src": "images/home/g/pension-1.webp",
+      "thumb": "images/home/g/pension-1-t.webp",
+      "cat": [
+        "pension",
+        "ocean"
+      ],
+      "alt": "바다 언덕 위 펜션 건물 전경",
+      "photo": 5
+    },
+    {
+      "src": "images/home/g/pension-2.webp",
+      "thumb": "images/home/g/pension-2-t.webp",
+      "cat": [
+        "pension",
+        "ocean"
+      ],
+      "alt": "펜션 테라스와 바다",
+      "photo": 19
+    },
+    {
+      "src": "images/home/g/pension-3.webp",
+      "thumb": "images/home/g/pension-3-t.webp",
+      "cat": [
+        "pension",
+        "ocean"
+      ],
+      "alt": "펜션 데크에서 보는 바다 전망",
+      "photo": 20
+    },
+    {
+      "src": "images/home/g/pension-4.webp",
+      "thumb": "images/home/g/pension-4-t.webp",
+      "cat": [
+        "pension",
+        "ocean"
+      ],
+      "alt": "바다를 따라 이어진 펜션 데크",
+      "photo": 21
+    },
+    {
+      "src": "images/home/g/pension-5.webp",
+      "thumb": "images/home/g/pension-5-t.webp",
+      "cat": [
+        "pension"
+      ],
+      "alt": "펜션 객실 앞 개별 데크와 테이블"
+    },
+    {
+      "src": "images/home/g/bbq-1.webp",
+      "thumb": "images/home/g/bbq-1-t.webp",
+      "cat": [
+        "bbq",
+        "ocean"
+      ],
+      "alt": "바다를 보며 즐기는 바비큐 데크"
+    },
+    {
+      "src": "images/home/g/bbq-2.webp",
+      "thumb": "images/home/g/bbq-2-t.webp",
+      "cat": [
+        "bbq"
+      ],
+      "alt": "웨버 그릴이 준비된 오션뷰 바비큐 테이블"
+    },
+    {
+      "src": "images/home/g/bbq-3.webp",
+      "thumb": "images/home/g/bbq-3-t.webp",
+      "cat": [
+        "bbq"
+      ],
+      "alt": "바다 쪽 바비큐 데크 테이블"
+    },
+    {
+      "src": "images/home/g/night-1.webp",
+      "thumb": "images/home/g/night-1-t.webp",
+      "cat": [
+        "tour",
+        "ocean"
+      ],
+      "alt": "펜션에서 내려다본 강양항 밤바다"
+    },
+    {
+      "src": "images/home/g/night-2.webp",
+      "thumb": "images/home/g/night-2-t.webp",
+      "cat": [
+        "tour",
+        "ocean"
+      ],
+      "alt": "불빛이 켜진 강양항 해안 산책로 야경",
+      "photo": 12
+    },
+    {
+      "src": "images/home/g/night-3.webp",
+      "thumb": "images/home/g/night-3-t.webp",
+      "cat": [
+        "caravan"
+      ],
+      "alt": "별빛 조명이 켜진 밤의 카라반 사이트",
+      "photo": 7
+    },
+    {
+      "src": "images/home/g/pool-1.webp",
+      "thumb": "images/home/g/pool-1-t.webp",
+      "cat": [
+        "pension"
+      ],
+      "alt": "여름 시즌 야외 수영장",
+      "photo": 13
+    }
+  ],
+  "spots": [
+    {
+      "name": "강양항",
+      "icon": "⚓",
+      "dist": "바로 앞",
+      "sub": "펜션 앞 작은 어항 · 일출 촬영 포인트",
+      "text": "펜션 바로 앞 항구. 이른 아침 수평선 위로 떠오르는 해와 고깃배가 어우러져 겨울 일출 출사지로 사랑받습니다.",
+      "img": "images/home/g/night-1-t.webp",
+      "query": "강양항"
+    },
+    {
+      "name": "명선교 · 명선도 야경",
+      "icon": "🌉",
+      "dist": "도보 5분",
+      "sub": "울주군 대표 야경 명소",
+      "text": "강양항과 진하해수욕장을 잇는 높이 17.5m 인도교. 밤이면 명선도 전체가 고래 미디어아트로 물듭니다.",
+      "img": "",
+      "query": "명선교"
+    },
+    {
+      "name": "진하해수욕장",
+      "icon": "🏖️",
+      "dist": "도보 10분",
+      "sub": "명선교 건너 바로 · 울산 최장 백사장",
+      "text": "경사가 완만하고 모래가 고와 아이들과 놀기 좋은 해수욕장. 서핑 · 요트 같은 해양레저로도 유명합니다.",
+      "img": "",
+      "query": "진하해수욕장"
+    },
+    {
+      "name": "서생포왜성",
+      "icon": "🌸",
+      "dist": "차로 10분",
+      "sub": "동해안 제일의 벚꽃 명소 · 입장료 무료",
+      "text": "성벽 길이 2.5km의 석성. 봄이면 성 전체가 벚꽃으로 뒤덮이고 성곽 위로 바다가 펼쳐집니다.",
+      "img": "",
+      "query": "서생포왜성"
+    },
+    {
+      "name": "간절곶",
+      "icon": "🌅",
+      "dist": "차로 15분",
+      "sub": "한반도에서 해가 가장 먼저 뜨는 곳",
+      "text": "새하얀 등대와 높이 5m 소망우체통이 대표 포토존. 잔디광장과 해안 산책로가 잘 가꾸어져 있습니다.",
+      "img": "",
+      "query": "간절곶"
+    },
+    {
+      "name": "외고산 옹기마을",
+      "icon": "🏺",
+      "dist": "차로 15분",
+      "sub": "국내 최대 옹기 집산지 · 아이 체험",
+      "text": "울산옹기박물관 무료 관람, 옹기 빚기 체험. 비 오는 날 일정으로 좋습니다. (월요일 휴관)",
+      "img": "",
+      "query": "외고산 옹기마을"
+    },
+    {
+      "name": "골프장 2곳",
+      "icon": "⛳",
+      "dist": "차로 10분",
+      "sub": "더골프클럽 · 오르비스 골프클럽",
+      "text": "라운딩 전후 숙소로 좋습니다. 이른 체크아웃 등 일정 조율은 전화로 문의해 주세요.",
+      "img": "",
+      "query": "더골프클럽 서생"
+    },
+    {
+      "name": "장생포 고래문화마을",
+      "icon": "🐋",
+      "dist": "차로 30분",
+      "sub": "고래박물관 · 생태체험관 · 고래바다여행선",
+      "text": "1970년대 포경 마을을 재현한 곳. 고래생태체험관에서 돌고래를 만나고, 고래바다여행선도 탈 수 있습니다. (월요일 휴관)",
+      "img": "",
+      "query": "장생포 고래문화마을"
+    },
+    {
+      "name": "태화강 국가정원",
+      "icon": "🎋",
+      "dist": "차로 35분",
+      "sub": "십리대숲 · 은하수길",
+      "text": "태화강을 따라 이어지는 대나무 숲. 밤에는 은하수길 조명이 켜집니다.",
+      "img": "",
+      "query": "태화강 국가정원"
+    }
+  ],
+  "faq": [
+    {
+      "keys": [
+        "입실",
+        "퇴실",
+        "체크인",
+        "체크아웃",
+        "몇시"
+      ],
+      "q": "입실 · 퇴실 시간",
+      "a": "입실은 15:00, 퇴실은 11:00입니다. 데크존 등 자세한 시간은 예약 시 안내해 드립니다."
+    },
+    {
+      "keys": [
+        "주차"
+      ],
+      "q": "주차",
+      "a": "펜션 안에 무료 주차장이 있습니다."
+    },
+    {
+      "keys": [
+        "바비큐",
+        "바베큐",
+        "그릴",
+        "숯",
+        "고기"
+      ],
+      "q": "바비큐",
+      "a": "바비큐 장비를 대여해 드립니다.\n· 웨버57 (6~8인용) 30,000원\n· 웨버47 (2~4인용) 20,000원\n숯(초기 점화 후 지급) · 여유숯 · 일회용 석쇠 · 장갑이 포함됩니다. 예약할 때 옵션으로 함께 선택할 수 있어요."
+    },
+    {
+      "keys": [
+        "수영장",
+        "수영",
+        "물놀이"
+      ],
+      "q": "수영장",
+      "a": "여름 시즌에 야외 간이 수영장을 운영합니다. 운영 기간은 전화로 미리 문의해 주세요."
+    },
+    {
+      "keys": [
+        "오락",
+        "월광",
+        "게임"
+      ],
+      "q": "월광보합",
+      "a": "추억의 월광보합 오락기를 무료로 이용할 수 있습니다. 2대뿐이라 예약할 때 선착순으로 선택해 주세요."
+    },
+    {
+      "keys": [
+        "담배",
+        "흡연",
+        "금연"
+      ],
+      "q": "흡연",
+      "a": "카라반과 객실 내부는 금연입니다. 지정된 장소를 이용해 주세요."
+    },
+    {
+      "keys": [
+        "회",
+        "횟집",
+        "식사",
+        "저녁",
+        "맛집"
+      ],
+      "q": "동해횟집",
+      "a": "펜션에서 동해횟집을 함께 운영합니다. 숙소 바로 옆에서 그날 들어온 신선한 회를 드실 수 있어요. 포장 · 단체 식사는 전화로 문의해 주세요."
+    },
+    {
+      "keys": [
+        "결제",
+        "입금",
+        "계좌",
+        "카드"
+      ],
+      "q": "결제 방법",
+      "a": "실시간 예약은 무통장입금으로 결제합니다. 예약하면 입금 계좌와 입금 기한을 문자로 안내해 드려요."
+    },
+    {
+      "keys": [
+        "취소",
+        "환불"
+      ],
+      "q": "취소 · 환불",
+      "a": "예약 취소와 환불은 예약 조회 화면에서 직접 하실 수 있습니다. 환불 규정은 예약 페이지에서 확인해 주세요."
+    },
+    {
+      "keys": [
+        "성수기"
+      ],
+      "q": "성수기",
+      "a": "2026년 성수기는 7월 16일 ~ 8월 30일, 12월 31일입니다. 주말은 금 · 토요일 및 공휴일 전날 기준이고, 비수기 금요일은 평일 요금이 적용됩니다."
+    },
+    {
+      "keys": [
+        "주소",
+        "위치",
+        "어디",
+        "길찾기",
+        "오시는"
+      ],
+      "q": "위치 · 길찾기",
+      "a": "울산광역시 울주군 온산읍 강양길 162 입니다. 내비게이션에 주소를 입력하시거나 아래 지도 버튼을 눌러 주세요."
+    }
+  ],
+  "_갤러리": "gallery 의 photo 번호는 images/photos/<번호>.jpg 원본. 여기 없는 번호(관리자 [사진 관리]에서 새로 올린 사진 포함)는 갤러리 '전체'에 자동으로 붙습니다. galleryExclude 번호는 빼고 보여 줌(14번 = 객실 도면).",
+  "galleryExclude": [
+    14
+  ]
+}

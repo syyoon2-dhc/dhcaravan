@@ -658,8 +658,29 @@ function showCancel(r) {
   const nd = INFO.nightDeposit || {};
   $('dep-night').textContent = nd.enabled && nd.start !== nd.end ? ` (밤 ${nd.start}시 ~ 아침 ${nd.end}시는 시간에서 빠집니다)` : '';
   viewMonth = monthOf(INFO.today);
-  loadCalendar();
+  if (!(await applyQuery())) loadCalendar();
 })();
+
+// 홈페이지 빠른 예약에서 넘어온 날짜 · 객실 · 인원 (reserve.html?ci=2026-12-24&co=2026-12-25&room=mujigae&n=10)
+// 날짜가 예약 가능 범위 밖이면 무시하고 평소처럼 달력부터 보여 줌
+async function applyQuery() {
+  const q = new URLSearchParams(location.search);
+  const qci = q.get('ci') || '', qco = q.get('co') || '', ymd = /^\d{4}-\d{2}-\d{2}$/;
+  if (!ymd.test(qci) || !ymd.test(qco) || qco <= qci || qci < INFO.today || qci > INFO.openUntil
+      || diffDays(qci, qco) > INFO.maxNights) return false;
+  ci = qci; co = qco;
+  viewMonth = monthOf(ci);
+  await loadCalendar();
+  updatePicked();
+  await searchRooms();
+  const r = ROOMS.find(x => x.id === q.get('room') && x.available);
+  if (r) {
+    picked[r.id] = { guests: Math.min(Math.max(+q.get('n') || r.std, 1), r.max), options: {} };
+    renderRooms();
+    onPickChange();
+  }
+  return true;
+}
 // 문자 속 링크(reserve.html#lookup)로 들어오면 바로 예약 조회 화면
 if (location.hash === '#lookup') document.querySelector('.tabs button[data-tab="lookup"]').click();
 </script>
