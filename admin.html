@@ -122,7 +122,7 @@
 
 <div class="top">
   <h1>📷 사진 관리</h1>
-  <span><a href="booking-admin.html">📅 예약 관리</a> <a href="index.html">홈페이지 보기 →</a><button class="logout-btn" id="logout-btn" hidden>로그아웃</button></span>
+  <span><a href="booking-admin.html">📅 예약 관리</a> <a href="https://syyoon2-dhc.github.io/donghae-hoe/admin.html" title="같은 GitHub 토큰으로 열림">🐟 횟집 관리</a> <a href="index.html">홈페이지 보기 →</a><button class="logout-btn" id="logout-btn" hidden>로그아웃</button></span>
 </div>
 
 <!-- 로그인 화면 -->
@@ -384,7 +384,7 @@ function showLogin() {
     document.querySelector('.login-box .sub').textContent = '인터넷 관리 모드 — 비밀번호 칸에 GitHub 토큰을 입력하세요';
     $('login-id').style.display = 'none';
     $('login-id').required = false;
-    $('login-pw').placeholder = 'GitHub 토큰 (ghp_ 또는 gho_ 로 시작)';
+    $('login-pw').placeholder = 'GitHub 토큰 (github_pat_ 로 시작) — 횟집 관리와 같은 토큰';
     setTimeout(() => $('login-pw').focus(), 50);
   } else {
     setTimeout(() => $('login-id').focus(), 50);
