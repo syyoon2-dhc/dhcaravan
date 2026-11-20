@@ -20,27 +20,47 @@
   let PRICE = null, SITE = null, ROOMS = [], PHONE = '010-4589-1415';
   const history = [];
 
+  // 캠핑 레인저 로봇: 일출 바다 배경 + 캠핑 모자(소나무 배지) · 반다나 · 손에 든 랜턴(불빛 깜빡임)
   // 그림 안 색(gradient) 이름이 겹치면 숨긴 쪽 그림 때문에 안 보이므로 쓸 때마다 이름을 다르게
   const ROBOT = k => `<svg viewBox="0 0 120 120" aria-hidden="true">
     <defs>
-      <radialGradient id="cgBody${k}" cx="40%" cy="30%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#e9eef2"/><stop offset="1" stop-color="#b9c6cf"/></radialGradient>
+      <clipPath id="cgClip${k}"><circle cx="60" cy="60" r="58"/></clipPath>
+      <linearGradient id="cgSky${k}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#102C40"/><stop offset=".45" stop-color="#397D96"/><stop offset=".72" stop-color="#f0b46a"/></linearGradient>
+      <linearGradient id="cgSea${k}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a6680"/><stop offset="1" stop-color="#102C40"/></linearGradient>
+      <radialGradient id="cgBody${k}" cx="38%" cy="28%" r="80%"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#eef1f3"/><stop offset="1" stop-color="#b9c6cf"/></radialGradient>
       <linearGradient id="cgFace${k}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d4d68"/><stop offset="1" stop-color="#0b2233"/></linearGradient>
       <radialGradient id="cgEye${k}" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#fff6dd"/><stop offset=".5" stop-color="#f3c977"/><stop offset="1" stop-color="#D5A65A"/></radialGradient>
-      <radialGradient id="cgBg${k}" cx="50%" cy="35%" r="70%"><stop offset="0" stop-color="#4f97b0"/><stop offset="1" stop-color="#102C40"/></radialGradient>
+      <linearGradient id="cgHat${k}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d9b57a"/><stop offset="1" stop-color="#a77f47"/></linearGradient>
+      <radialGradient id="cgGlow${k}" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ffe7a3" stop-opacity=".95"/><stop offset="1" stop-color="#ffb84d" stop-opacity="0"/></radialGradient>
     </defs>
-    <circle cx="60" cy="60" r="58" fill="url(#cgBg${k})"/>
-    <line x1="60" y1="24" x2="60" y2="14" stroke="#D5A65A" stroke-width="3" stroke-linecap="round"/>
-    <circle cx="60" cy="12" r="5" fill="url(#cgEye${k})"/>
-    <rect x="22" y="48" width="9" height="20" rx="4.5" fill="#cfd9e0"/>
-    <rect x="89" y="48" width="9" height="20" rx="4.5" fill="#cfd9e0"/>
-    <rect x="28" y="24" width="64" height="58" rx="24" fill="url(#cgBody${k})"/>
-    <rect x="35" y="36" width="50" height="32" rx="15" fill="url(#cgFace${k})"/>
-    <ellipse cx="48" cy="51" rx="5.5" ry="6.5" fill="url(#cgEye${k})"><animate attributeName="ry" values="6.5;6.5;0.8;6.5;6.5" keyTimes="0;.9;.94;.98;1" dur="4s" repeatCount="indefinite"/></ellipse>
-    <ellipse cx="72" cy="51" rx="5.5" ry="6.5" fill="url(#cgEye${k})"><animate attributeName="ry" values="6.5;6.5;0.8;6.5;6.5" keyTimes="0;.9;.94;.98;1" dur="4s" repeatCount="indefinite"/></ellipse>
-    <path d="M53 60 q7 5 14 0" stroke="#D5A65A" stroke-width="2.4" fill="none" stroke-linecap="round"/>
-    <ellipse cx="44" cy="30" rx="12" ry="4" fill="#fff" opacity=".7"/>
-    <path d="M38 86 h44 a8 8 0 0 1 8 8 v8 a22 22 0 0 1 -60 0 v-8 a8 8 0 0 1 8 -8z" fill="url(#cgBody${k})"/>
-    <circle cx="60" cy="96" r="5" fill="#D5A65A"/>
+    <g clip-path="url(#cgClip${k})">
+      <rect width="120" height="120" fill="url(#cgSky${k})"/>
+      <circle cx="18" cy="86" r="11" fill="#ffd27a" opacity=".95"/><circle cx="18" cy="86" r="17" fill="#ffd27a" opacity=".25"/>
+      <rect y="85" width="120" height="35" fill="url(#cgSea${k})"/>
+      <path d="M6 92 h22 M10 97 h14 M84 95 h14" stroke="#ffd27a" stroke-width="1.6" stroke-linecap="round" opacity=".7"/>
+      <path d="M34 98 h52 a10 10 0 0 1 10 10 v14 h-72 v-14 a10 10 0 0 1 10 -10z" fill="url(#cgBody${k})"/>
+      <path d="M90 104 q8 -2 10 -12" stroke="#cfd9e0" stroke-width="6" fill="none" stroke-linecap="round"/>
+    </g>
+    <circle cx="101" cy="84" r="14" fill="url(#cgGlow${k})"><animate attributeName="opacity" values=".75;1;.85;1;.7" dur="2.4s" repeatCount="indefinite"/></circle>
+    <path d="M96.5 76 q4.5 -6 9 0" stroke="#5b4630" stroke-width="1.8" fill="none"/>
+    <rect x="96" y="76" width="10" height="3" rx="1" fill="#5b4630"/>
+    <rect x="96.8" y="79" width="8.4" height="10" rx="2" fill="#ffd77f" stroke="#5b4630" stroke-width="1.4"/>
+    <rect x="96" y="89" width="10" height="3" rx="1" fill="#5b4630"/>
+    <rect x="23" y="56" width="8" height="16" rx="4" fill="#cfd9e0"/>
+    <rect x="89" y="56" width="8" height="16" rx="4" fill="#cfd9e0"/>
+    <rect x="29" y="38" width="62" height="52" rx="22" fill="url(#cgBody${k})"/>
+    <rect x="36" y="49" width="48" height="29" rx="13" fill="url(#cgFace${k})"/>
+    <ellipse cx="49" cy="62" rx="5" ry="6" fill="url(#cgEye${k})"><animate attributeName="ry" values="6;6;0.8;6;6" keyTimes="0;.9;.94;.98;1" dur="4s" repeatCount="indefinite"/></ellipse>
+    <ellipse cx="71" cy="62" rx="5" ry="6" fill="url(#cgEye${k})"><animate attributeName="ry" values="6;6;0.8;6;6" keyTimes="0;.9;.94;.98;1" dur="4s" repeatCount="indefinite"/></ellipse>
+    <path d="M54 70 q6 4.5 12 0" stroke="#D5A65A" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <circle cx="40" cy="71" r="3" fill="#f08a6b" opacity=".45"/><circle cx="80" cy="71" r="3" fill="#f08a6b" opacity=".45"/>
+    <ellipse cx="60" cy="40" rx="38" ry="7" fill="#9c7542"/>
+    <path d="M37 40 Q38 17 60 16 Q82 17 83 40 Z" fill="url(#cgHat${k})"/>
+    <path d="M38 33 Q60 37 82 33 L82.6 38.5 Q60 42.5 37.4 38.5 Z" fill="#102C40"/>
+    <path d="M60 23 l-5.5 9 h3.5 l-4.5 6.5 h13 l-4.5 -6.5 h3.5 z" fill="#2f6b4f" transform="translate(13 -2) scale(.8)" transform-origin="60 30"/>
+    <ellipse cx="50" cy="22" rx="8" ry="2.6" fill="#fff" opacity=".35"/>
+    <path d="M42 88 L78 88 L60 102 Z" fill="#e0703f"/>
+    <circle cx="69" cy="91" r="3" fill="#c85a2c"/>
   </svg>`;
 
   /* ---------- 데이터 ---------- */
