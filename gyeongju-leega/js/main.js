@@ -49,10 +49,40 @@ function render() {
 
   $('foot-stores').innerHTML = D.stores.map(s =>
     `<p class="foot-st"><b>${esc(s.name)}</b> · ${esc(s.road)} · <a href="tel:${esc(s.phone)}">${esc(s.phone)}</a> · ${esc(s.closed)}</p>`).join('');
-  $('sheet-list').innerHTML = D.stores.map(s => {
-    const st = status(s);
-    return `<a href="tel:${esc(s.phone)}">${esc(s.name)}<small>${esc(s.area)} · ${esc(st.text)}</small><span>${esc(s.phone)}</span></a>`;
-  }).join('');
+  // 배달앱 주소가 하나라도 있으면 [배달 주문] 버튼을 보여 줌 (휴대폰 하단은 '지점' 대신)
+  const anyDelivery = D.stores.some(s => links(s).length);
+  document.querySelectorAll('[data-delivery]').forEach(b => { b.hidden = !anyDelivery; });
+  $('mbar-stores').hidden = anyDelivery;
+}
+
+/* ---------- 배달 주문: 지점 → 그 지점이 입점한 배달앱 → 앱의 가게 주문 화면 ----------
+ * 주문 · 결제 · 배달은 각 배달앱에서 진행. 주소가 없는 앱은 버튼을 숨김.
+ * https 주소를 그대로 열면 휴대폰에서는 배달앱이 설치돼 있을 때 앱으로 열림 */
+const links = s => (D.platforms || []).filter(p => /^https:\/\//.test((s.delivery || {})[p.id] || ''))
+  .map(p => ({ ...p, url: s.delivery[p.id] }));
+
+function openSheet(mode, storeId) {
+  const list = $('sheet-list');
+  if (mode === 'call') {
+    $('sheet-title').textContent = '어느 지점으로 전화할까요?';
+    list.innerHTML = D.stores.map(s => `<a href="tel:${esc(s.phone)}">${esc(s.name)}<small>${esc(s.area)} · ${esc(status(s).text)}</small><span>${esc(s.phone)}</span></a>`).join('');
+  } else if (!storeId) {
+    $('sheet-title').textContent = '🛵 어느 지점에서 배달 주문할까요?';
+    list.innerHTML = D.stores.map(s => {
+      const n = links(s).length;
+      return `<a href="#" data-dstore="${esc(s.id)}">${esc(s.name)}<small>${esc(s.area)} · ${esc(status(s).text)}</small><span>${n ? `배달앱 ${n}곳 ›` : '전화 주문 ›'}</span></a>`;
+    }).join('');
+  } else {
+    const s = D.stores.find(x => x.id === storeId);
+    const ls = links(s);
+    $('sheet-title').textContent = `🛵 ${s.name} 배달 주문`;
+    list.innerHTML = (ls.length
+      ? ls.map(p => `<a class="plat" href="${esc(p.url)}" target="_blank" rel="noopener" style="--c:${esc(p.color)}">${esc(p.name)}<small>앱에서 주문 · 결제</small><span>열기 ›</span></a>`).join('')
+      : `<p class="sheet-empty">${esc(s.name)}은 아직 배달앱 주문 링크가 없어요.<br>전화로 주문해 주세요.</p>`) +
+      `<a href="tel:${esc(s.phone)}">📞 전화 주문<small>${esc(s.name)}</small><span>${esc(s.phone)}</span></a>
+       <button type="button" class="sheet-back" data-delivery>‹ 다른 지점 고르기</button>`;
+  }
+  $('sheet').hidden = false;
 }
 
 function renderStores(nearId) {
@@ -83,6 +113,7 @@ function renderStores(nearId) {
         <table class="hours">${rows}</table>
         <p class="lm">${esc(s.closed)}${s.lastOrder ? ` · 라스트오더 ${esc(s.lastOrder)}` : ''}</p>
         <div class="feat">${s.features.map(f => `<span>${esc(f)}</span>`).join('')}</div>
+        ${links(s).length ? `<div class="dlv">${links(s).map(p => `<a href="${esc(p.url)}" target="_blank" rel="noopener" style="--c:${esc(p.color)}">🛵 ${esc(p.name)}</a>`).join('')}</div>` : ''}
         <div class="acts">
           <a class="btn btn-red full" href="tel:${esc(s.phone)}">전화 · 포장 주문</a>
           <a class="btn btn-line" href="${naver}" target="_blank" rel="noopener">네이버 지도</a>
@@ -130,7 +161,11 @@ document.addEventListener('click', e => {
     document.querySelectorAll('#board-tabs button').forEach(b => b.classList.toggle('on', b === t));
     document.querySelectorAll('#board-body .mgroup').forEach(g => g.classList.toggle('on', g.dataset.g === t.dataset.g));
   }
-  if (e.target.closest('#call-open')) $('sheet').hidden = false;
+  if (e.target.closest('#call-open')) openSheet('call');
+  if (e.target.closest('[data-delivery]')) openSheet('delivery');
+  const ds = e.target.closest('[data-dstore]');
+  if (ds) { e.preventDefault(); openSheet('delivery', ds.dataset.dstore); }
+  if (e.target.closest('.plat')) $('sheet').hidden = true;
   if (e.target.closest('[data-close]')) $('sheet').hidden = true;
 });
 const nav = $('nav');

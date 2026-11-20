@@ -193,7 +193,12 @@
       "features": [
         "포장"
       ],
-      "review": "혼자도 편안하게 즐기는 국밥 한상"
+      "review": "혼자도 편안하게 즐기는 국밥 한상",
+      "delivery": {
+        "baemin": "",
+        "coupangeats": "",
+        "yogiyo": ""
+      }
     },
     {
       "id": "dongcheon",
@@ -245,7 +250,12 @@
         "무선 인터넷",
         "남/녀 화장실 구분"
       ],
-      "review": "잡내 없이 깔끔한 돼지국밥의 매력"
+      "review": "잡내 없이 깔끔한 돼지국밥의 매력",
+      "delivery": {
+        "baemin": "",
+        "coupangeats": "",
+        "yogiyo": ""
+      }
     },
     {
       "id": "yangnam",
@@ -296,7 +306,12 @@
         "유아의자",
         "무선 인터넷"
       ],
-      "review": ""
+      "review": "",
+      "delivery": {
+        "baemin": "",
+        "coupangeats": "",
+        "yogiyo": ""
+      }
     }
   ],
   "gallery": [
@@ -319,6 +334,24 @@
     {
       "src": "images/sundae2.webp",
       "alt": "순대와 고기가 들어간 순대국밥"
+    }
+  ],
+  "_배달": "stores[].delivery: 배달앱 가게 주소(https). 비어 있는 앱은 버튼이 안 보임. 관리자 화면(admin.html) [지점] 탭에서 넣기. 주문 · 결제는 각 배달앱에서 진행 (홈페이지는 연결만).",
+  "platforms": [
+    {
+      "id": "baemin",
+      "name": "배달의민족",
+      "color": "#2AC1BC"
+    },
+    {
+      "id": "coupangeats",
+      "name": "쿠팡이츠",
+      "color": "#0073E9"
+    },
+    {
+      "id": "yogiyo",
+      "name": "요기요",
+      "color": "#FA0050"
     }
   ]
 }

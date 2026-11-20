@@ -253,3 +253,12 @@ button { font-family: inherit; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .rv-in { opacity: 1; transform: none; }
 }
+
+/* 배달 주문 (배달앱 연결만) */
+.sheet-box a.plat { border-color: var(--c); color: var(--c); }
+.sheet-box a.plat span { color: var(--c); }
+.sheet-empty { text-align: center; color: var(--muted); font-size: 14.5px; padding: 8px 0 14px; }
+.sheet-back { width: 100%; height: 44px; border: 0; background: none; font-size: 14.5px; font-weight: 700; color: var(--muted); cursor: pointer; }
+.store .dlv { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.store .dlv a { font-size: 13px; font-weight: 800; padding: 6px 12px; border-radius: 50px; border: 1.5px solid var(--c); color: var(--c); }
+.mbar [hidden] { display: none !important; }

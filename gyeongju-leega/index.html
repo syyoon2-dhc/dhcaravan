@@ -67,6 +67,7 @@
         <p class="hero-sub">국밥 한 가지만 연구해 온 <b>경주이가국밥</b>.<br>뜨끈한 한 그릇으로 오늘 하루를 든든하게.</p>
         <div class="hero-btns">
           <a href="#menu-sec" class="btn btn-red">메뉴 보기</a>
+          <button type="button" class="btn btn-dark" data-delivery hidden>🛵 배달 주문</button>
           <a href="#stores" class="btn btn-line">가까운 지점 찾기</a>
         </div>
         <p class="hero-open" id="hero-open"></p>
@@ -159,15 +160,16 @@
 <!-- 휴대폰 하단 메뉴 -->
 <nav class="mbar" aria-label="빠른 메뉴">
   <a href="#menu-sec"><i>🍲</i>메뉴</a>
-  <a href="#stores"><i>📍</i>지점 · 길찾기</a>
+  <a href="#stores" id="mbar-stores"><i>📍</i>지점 · 길찾기</a>
+  <button type="button" data-delivery hidden><i>🛵</i>배달 주문</button>
   <button type="button" id="call-open" class="main"><i>📞</i>전화 주문</button>
 </nav>
 
-<!-- 전화할 지점 고르기 -->
+<!-- 지점 고르기 (전화 · 배달 주문) — 배달 주문 · 결제는 각 배달앱에서, 홈페이지는 연결만 -->
 <div class="sheet" id="sheet" hidden>
   <div class="sheet-bg" data-close></div>
   <div class="sheet-box">
-    <h3>어느 지점으로 전화할까요?</h3>
+    <h3 id="sheet-title">어느 지점으로 전화할까요?</h3>
     <div id="sheet-list"></div>
     <button class="sheet-x" data-close type="button">닫기</button>
   </div>

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>관리자 · 경주이가국밥</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root { --red: #B3261E; --ink: #1E1A17; --paper: #F5EEDF; --line: #e2d6bf; --muted: #6d625a; --ok: #2e7d4f; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  [hidden] { display: none !important; }
+  body { font-family: 'Pretendard', 'Malgun Gothic', sans-serif; background: #faf7f0; color: var(--ink); font-size: 15px; padding-bottom: 90px; }
+  button, input, textarea, select { font: inherit; }
+  .top { position: sticky; top: 0; z-index: 10; background: var(--ink); color: #fff; }
+  .top-in { max-width: 980px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 10px; }
+  .top img { height: 30px; }
+  .top b { font-size: 15px; }
+  .top a, .top button { margin-left: auto; color: #fff; background: rgba(255,255,255,.12); border: 0; border-radius: 8px; padding: 7px 12px; font-size: 13.5px; cursor: pointer; }
+  .top button { margin-left: 6px; }
+  .tabs { max-width: 980px; margin: 0 auto; display: flex; gap: 4px; padding: 0 12px; overflow-x: auto; }
+  .tabs button { flex-shrink: 0; border: 0; background: none; color: rgba(255,255,255,.7); padding: 12px 14px; font-weight: 700; cursor: pointer; border-bottom: 3px solid transparent; }
+  .tabs button.on { color: #fff; border-color: #e8b04a; }
+  main { max-width: 980px; margin: 0 auto; padding: 18px 16px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-bottom: 14px; }
+  .card h2 { font-size: 18px; margin-bottom: 4px; }
+  .card h3 { font-size: 16px; margin: 14px 0 8px; }
+  .hint { font-size: 13px; color: var(--muted); margin-bottom: 12px; line-height: 1.6; }
+  label { display: block; font-size: 13px; font-weight: 700; margin: 10px 0 4px; }
+  input[type=text], input[type=url], input[type=password], input[type=time], textarea { width: 100%; border: 1.5px solid var(--line); border-radius: 10px; padding: 9px 11px; background: #fff; }
+  textarea { min-height: 80px; resize: vertical; }
+  input:focus, textarea:focus { outline: none; border-color: var(--red); }
+  input.bad { border-color: #d33; background: #fff5f5; }
+  .btn { border: 0; border-radius: 10px; padding: 9px 14px; font-weight: 700; cursor: pointer; background: var(--paper); color: var(--ink); }
+  .btn-red { background: var(--red); color: #fff; }
+  .btn-sm { padding: 6px 10px; font-size: 13px; }
+  .row { display: grid; grid-template-columns: 1fr 140px 1fr auto; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  .row input { padding: 7px 9px; }
+  .ctl { display: flex; gap: 3px; }
+  .ctl button { width: 32px; height: 32px; border: 1px solid var(--line); background: #fff; border-radius: 8px; cursor: pointer; }
+  .ctl button.del { color: #c33; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+  .pic { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; }
+  .pic .ph { position: relative; aspect-ratio: 4 / 3; background: var(--paper) center / cover no-repeat; cursor: pointer; }
+  .pic .ph span { position: absolute; inset: auto 6px 6px auto; background: rgba(0,0,0,.6); color: #fff; font-size: 12px; padding: 3px 8px; border-radius: 50px; }
+  .pic .bd { padding: 8px; display: grid; gap: 5px; }
+  .pic .bd input { padding: 6px 8px; font-size: 14px; }
+  .hours { display: grid; grid-template-columns: 34px 70px 1fr 1fr; gap: 6px; align-items: center; margin-bottom: 4px; }
+  .hours input[type=time] { padding: 6px 8px; min-width: 0; }
+  .hours label { margin: 0; font-weight: 500; display: flex; gap: 4px; align-items: center; }
+  .plat { display: grid; grid-template-columns: 100px 1fr; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .plat b { font-size: 14px; }
+  .bar { position: fixed; inset: auto 0 0; background: #fff; border-top: 1px solid var(--line); box-shadow: 0 -4px 16px rgba(0,0,0,.06); z-index: 20; }
+  .bar-in { max-width: 980px; margin: 0 auto; padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
+  .bar p { flex: 1; font-size: 13.5px; color: var(--muted); }
+  .bar p.dirty { color: var(--red); font-weight: 700; }
+  .bar .btn-red { padding: 12px 22px; font-size: 15px; }
+  .login { max-width: 420px; margin: 60px auto; }
+  .login ol { margin: 8px 0 0 18px; font-size: 13.5px; color: var(--muted); line-height: 1.8; }
+  .toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 11px 18px; border-radius: 50px; font-size: 14px; z-index: 50; max-width: 92vw; }
+  .warn { color: #b25b00; font-size: 12.5px; }
+  @media (max-width: 640px) {
+    .row { grid-template-columns: 1fr 110px; }
+    .row .note { grid-column: 1; }
+    .row .ctl { grid-column: 2; justify-content: flex-end; }
+    .plat { grid-template-columns: 1fr; gap: 2px; }
+    .hours { grid-template-columns: 22px 58px 1fr 1fr; gap: 4px; }
+    .hours input[type=time] { padding: 6px 4px; font-size: 13.5px; }
+    .card .grid[style] { grid-template-columns: 1fr !important; }
+    .top b { display: none; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <img src="images/logo-light.png" alt="경주 李가국밥"><b>관리자</b>
+    <a href="./" target="_blank">홈페이지 보기</a>
+    <button id="logout" type="button" hidden>로그아웃</button>
+  </div>
+  <nav class="tabs" id="tabs" hidden>
+    <button data-t="menu" class="on">메뉴판</button>
+    <button data-t="sig">대표 메뉴</button>
+    <button data-t="gallery">사진</button>
+    <button data-t="stores">지점 · 배달</button>
+    <button data-t="brand">기본 문구</button>
+  </nav>
+</header>
+
+<main>
+  <!-- 로그인: GitHub 토큰 (홈페이지 저장소에 직접 저장하므로) -->
+  <section class="card login" id="login" hidden>
+    <h2>관리자 로그인</h2>
+    <p class="hint">홈페이지 파일이 있는 GitHub 저장소에 바로 저장합니다. GitHub 토큰을 넣어 주세요.</p>
+    <label for="token">GitHub 토큰</label>
+    <input type="password" id="token" autocomplete="off" placeholder="github_pat_...">
+    <label style="font-weight:500"><input type="checkbox" id="remember" checked> 이 기기에서 기억하기 (공용 PC에서는 끄세요)</label>
+    <button class="btn btn-red" id="login-btn" type="button" style="width:100%;margin-top:12px">로그인</button>
+    <p class="hint" id="login-err" style="color:#c33;margin-top:10px"></p>
+    <ol>
+      <li>GitHub → Settings → Developer settings → Fine-grained tokens → Generate new token</li>
+      <li>Repository access: 이 홈페이지 저장소만 선택</li>
+      <li>Permissions → Contents: <b>Read and write</b></li>
+      <li>만든 토큰을 위 칸에 붙여 넣기 (토큰은 이 기기에만 저장되고 다른 곳으로 보내지 않습니다)</li>
+    </ol>
+  </section>
+
+  <section id="panel-menu" hidden></section>
+  <section id="panel-sig" hidden></section>
+  <section id="panel-gallery" hidden></section>
+  <section id="panel-stores" hidden></section>
+  <section id="panel-brand" hidden></section>
+</main>
+
+<div class="bar" id="bar" hidden>
+  <div class="bar-in">
+    <p id="state">불러오는 중...</p>
+    <button class="btn btn-red" id="save" type="button">저장하기</button>
+  </div>
+</div>
+<input type="file" id="file" accept="image/*" hidden>
+<input type="file" id="files" accept="image/*" multiple hidden>
+
+<script src="js/admin.js"></script>
+</body>
+</html>
