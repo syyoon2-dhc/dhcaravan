@@ -259,6 +259,7 @@
     if (faq) {
       const acts = /주소|위치|길찾기|어디|오시는/.test(t) && SITE.contact
         ? [{ label: '네이버 지도', href: SITE.contact.naverMap, blank: true }, { label: '카카오맵', href: SITE.contact.kakaoMap, blank: true }] : [];
+      if (faq.link) acts.push({ label: faq.link.label, href: faq.link.href, blank: true, cls: 'gold' });   // site.json faq[].link (예: 횟집 홈페이지)
       return { html: esc(faq.a), acts };
     }
     if (has(/시설|편의|비품|부대/)) return ansFacilities();
